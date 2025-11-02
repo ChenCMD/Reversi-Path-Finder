@@ -32,6 +32,12 @@
                 "gradle.java.home": "/usr/lib/jvm/msopenjdk-current"
             }
         }
+    },
+    "mounts": [
+        "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind"
+    ],
+    "containerEnv": {
+        "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
     }
     // Use 'forwardPorts' to make a list of ports inside the container available locally.
     // "forwardPorts": [],
