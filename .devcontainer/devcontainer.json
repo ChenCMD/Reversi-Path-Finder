@@ -28,7 +28,8 @@
                 "files.trimTrailingWhitespace": true,
                 "git.branchProtection": [
                     "main"
-                ]
+                ],
+                "gradle.java.home": "/usr/lib/jvm/msopenjdk-current"
             }
         }
     }
