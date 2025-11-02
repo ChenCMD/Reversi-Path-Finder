@@ -35,7 +35,7 @@
         }
     },
     "mounts": [
-        "source=${localEnv:HOME}/.claude,target=/home/vscode/.claude,type=bind",
+        "source=claudeconfig-${devcontainerId},target=/home/vscode/.claude,type=volume",
         "source=commandhistory-${devcontainerId},target=/commandhistory,type=volume"
     ],
     "containerEnv": {
