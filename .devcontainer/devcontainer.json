@@ -29,6 +29,7 @@
                 "files.insertFinalNewline": true,
                 "files.trimFinalNewlines": true,
                 "files.trimTrailingWhitespace": true,
+                "java.import.gradle.java.home": "/usr/lib/jvm/msopenjdk-current",
                 "gradle.java.home": "/usr/lib/jvm/msopenjdk-current"
             }
         }
