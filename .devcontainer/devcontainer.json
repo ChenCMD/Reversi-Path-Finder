@@ -22,10 +22,6 @@
                 "mathiasfrohlich.Kotlin"
             ],
             "settings": {
-                "[python]": {
-                    "editor.detectIndentation": false,
-                    "editor.tabSize": 4
-                },
                 "files.eol": "\n",
                 "files.insertFinalNewline": true,
                 "files.trimFinalNewlines": true,
