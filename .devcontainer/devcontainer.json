@@ -11,6 +11,30 @@
             "installGradle": "true"
         },
         "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "streetsidesoftware.code-spell-checker",
+                "VisualStudioExptTeam.vscodeintellicode",
+                "GitHub.copilot",
+                "Anthropic.claude-code",
+                "mathiasfrohlich.Kotlin"
+            ],
+            "settings": {
+                "[python]": {
+                    "editor.detectIndentation": false,
+                    "editor.tabSize": 4
+                },
+                "files.eol": "\n",
+                "files.insertFinalNewline": true,
+                "files.trimFinalNewlines": true,
+                "files.trimTrailingWhitespace": true,
+                "git.branchProtection": [
+                    "main"
+                ]
+            }
+        }
     }
     // Use 'forwardPorts' to make a list of ports inside the container available locally.
     // "forwardPorts": [],
