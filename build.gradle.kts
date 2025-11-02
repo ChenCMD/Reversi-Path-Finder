@@ -2,7 +2,8 @@ plugins {
     kotlin("jvm") version "1.9.21"
 }
 
-group = "org.example"
+rootProject.name = "reversi-path-finder"
+group = "io.github.chencmd"
 version = "1.0-SNAPSHOT"
 
 repositories {
