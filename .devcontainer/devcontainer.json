@@ -5,7 +5,10 @@
     // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
     "build": {
         "dockerfile": "Dockerfile",
-        "context": "."
+        "context": ".",
+        "args": {
+            "KOTLIN_FOR_VSCODE_VERSION": "0.253.10629"
+        }
     },
     "features": {
         "ghcr.io/devcontainers/features/java:1": {
@@ -22,7 +25,8 @@
                 "VisualStudioExptTeam.vscodeintellicode",
                 "GitHub.copilot",
                 "Anthropic.claude-code",
-                "mathiasfrohlich.Kotlin"
+                "openai.chatgpt",
+                "/tmp/kotlin-for-vscode.vsix"
             ],
             "settings": {
                 "files.eol": "\n",
