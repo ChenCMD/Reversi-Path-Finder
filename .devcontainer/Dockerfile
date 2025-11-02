@@ -9,4 +9,5 @@ RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhisto
   && chown -R $USERNAME /commandhistory \
   && echo "$SNIPPET" >> "/home/$USERNAME/.bashrc"
 
+# Used to store Claude configuration files
 RUN mkdir /home/$USERNAME/.claude && chown -R $USERNAME /home/$USERNAME/.claude
