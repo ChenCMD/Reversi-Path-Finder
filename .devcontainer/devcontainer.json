@@ -25,7 +25,8 @@
                 "files.insertFinalNewline": true,
                 "files.trimFinalNewlines": true,
                 "files.trimTrailingWhitespace": true,
-                "rust-analyzer.cargo.allFeatures": true
+                "rust-analyzer.cargo.allFeatures": true,
+                "editor.formatOnSave": true
             }
         }
     },
