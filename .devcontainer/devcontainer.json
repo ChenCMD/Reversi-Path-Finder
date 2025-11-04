@@ -1,21 +1,13 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
-// README at: https://github.com/devcontainers/templates/tree/main/src/java
+// README at: https://github.com/devcontainers/templates/tree/main/src/rust
 {
-    "name": "Java",
+    "name": "Rust",
     // Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
     "build": {
         "dockerfile": "Dockerfile",
-        "context": ".",
-        "args": {
-            "KOTLIN_FOR_VSCODE_VERSION": "0.253.10629"
-        }
+        "context": "."
     },
     "features": {
-        "ghcr.io/devcontainers/features/java:1": {
-            "version": "none",
-            "installMaven": "false",
-            "installGradle": "true"
-        },
         "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
     },
     "customizations": {
@@ -26,15 +18,14 @@
                 "GitHub.copilot",
                 "Anthropic.claude-code",
                 "openai.chatgpt",
-                "/tmp/kotlin-for-vscode.vsix"
+                "rust-lang.rust-analyzer"
             ],
             "settings": {
                 "files.eol": "\n",
                 "files.insertFinalNewline": true,
                 "files.trimFinalNewlines": true,
                 "files.trimTrailingWhitespace": true,
-                "java.import.gradle.java.home": "/usr/lib/jvm/msopenjdk-current",
-                "gradle.java.home": "/usr/lib/jvm/msopenjdk-current"
+                "rust-analyzer.cargo.allFeatures": true
             }
         }
     },
@@ -44,11 +35,11 @@
     ],
     "containerEnv": {
         "CLAUDE_CONFIG_DIR": "/home/vscode/.claude"
-    }
+    },
     // Use 'forwardPorts' to make a list of ports inside the container available locally.
     // "forwardPorts": [],
     // Use 'postCreateCommand' to run commands after the container is created.
-    // "postCreateCommand": "java -version",
+    "postCreateCommand": "rustup show"
     // Configure tool-specific properties.
     // "customizations": {},
     // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
