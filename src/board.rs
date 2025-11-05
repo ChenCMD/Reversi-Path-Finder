@@ -237,19 +237,6 @@ pub mod example_boards {
     use super::Board;
 
     #[rustfmt::skip]
-    pub const REACHABLE_1_STEP: LazyLock<Board> = LazyLock::new(|| {
-        Board::from_012_array([
-            /*       A  B  C  D  E  F */
-            /* 1 */ [0, 0, 0, 0, 0, 0],
-            /* 2 */ [0, 0, 0, 0, 0, 0],
-            /* 3 */ [0, 2, 2, 2, 0, 0], // B3
-            /* 4 */ [0, 0, 2, 1, 0, 0],
-            /* 5 */ [0, 0, 0, 0, 0, 0],
-            /* 6 */ [0, 0, 0, 0, 0, 0],
-        ])
-    });
-
-    #[rustfmt::skip]
     pub const UNREACHABLE_2_STEPS: LazyLock<Board> = LazyLock::new(|| {
         Board::from_012_array([
             /*       A  B  C  D  E  F */

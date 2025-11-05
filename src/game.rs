@@ -16,13 +16,13 @@ pub const INITIAL_BOARD: LazyLock<Board> = LazyLock::new(|| {
     ])
 });
 
-pub struct UncheckedGameProgression([CellCoord; 32]);
+pub struct UncheckedGameProgression(Vec<CellCoord>);
 
 impl UncheckedGameProgression {
     pub fn from_game_record_string(game_record: &str) -> Self {
-        let mut specs = [CellCoord::new(0, 0); 32];
+        let mut specs = vec![];
         // Parse moves like "B3B2C2..."
-        for (i, move_str) in game_record.as_bytes().chunks(2).enumerate() {
+        for move_str in game_record.as_bytes().chunks(2) {
             let column = move_str[0] - b'A';
             let row = move_str[1] - b'1';
 
@@ -33,7 +33,7 @@ impl UncheckedGameProgression {
                 );
             }
 
-            specs[i] = CellCoord::new(column, row);
+            specs.push(CellCoord::new(column, row));
         }
         UncheckedGameProgression(specs)
     }
