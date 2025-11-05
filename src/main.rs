@@ -6,7 +6,7 @@ use reversi_path_finder::game::*;
 fn init_yices2_ctx() -> easy_smt::Context {
     ContextBuilder::new()
         .solver("yices-smt2")
-        .solver_args(["--incremental"])
+        .solver_args(["--delegate=kissat"])
         .build()
         .expect("Failed to create SMT context with Yices2")
 }
@@ -330,15 +330,14 @@ fn main() {
     println!("Testing Unreachable State (expect UNSAT)...");
     assert!(test_reachability(&example_boards::UNREACHABLE_BROKEN) == Response::Unsat);
 
-    // This should be passing, but with the current implementation it takes too long.
-    // assert!(
-    //     test_reachability(
-    //         &UncheckedGameProgression::from_game_record_string(
-    //             "C2B4A5A4E5E4C5B2F4D2D1D6C1E1B6E3E2E6A3C6F1A1F3B1B5F2D5F5F6A6B3A2"
-    //         )
-    //         .play_through()
-    //     ) == Response::Sat
-    // );
+    assert!(
+        test_reachability(
+            &UncheckedGameProgression::from_game_record_string(
+                "C2B4A5A4E5E4C5B2F4D2D1D6C1E1B6E3E2E6A3C6F1A1F3B1B5F2D5F5F6A6B3A2"
+            )
+            .play_through()
+        ) == Response::Sat
+    );
 }
 
 fn test_reachability(final_state: &Board) -> Response {

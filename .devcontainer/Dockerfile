@@ -21,15 +21,31 @@ RUN apt-get update && apt-get install -y \
   libgmp-dev \
   wget \
   build-essential \
+  autoconf \
+  git \
   && rm -rf /var/lib/apt/lists/*
 
-# Download and install Yices2
+# Build and install Kissat SAT solver (with -fPIC for Yices2 compatibility)
 RUN cd /tmp \
-  && wget https://yices.csl.sri.com/releases/2.6.4/yices-2.6.4-x86_64-pc-linux-gnu.tar.gz \
-  && tar -xzf yices-2.6.4-x86_64-pc-linux-gnu.tar.gz \
-  && cd yices-2.6.4 \
-  && ./install-yices /usr/local \
-  && rm -rf /tmp/yices-2.6.4*
+  && git clone https://github.com/BrunoDutertre/kissat \
+  && cd kissat \
+  && ./configure -fPIC \
+  && make \
+  && install build/libkissat.a /usr/local/lib \
+  && install -m644 src/kissat.h /usr/local/include \
+  && cd /tmp \
+  && rm -rf kissat
+
+# Build and install Yices2 from source with Kissat support
+RUN cd /tmp \
+  && git clone https://github.com/SRI-CSL/yices2 \
+  && cd yices2 \
+  && autoconf \
+  && ./configure CPPFLAGS=-DHAVE_KISSAT LIBS='-lkissat -lm' \
+  && make -j \
+  && make install \
+  && cd /tmp \
+  && rm -rf yices2
 
 # Set library path for Yices2
 ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
