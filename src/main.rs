@@ -352,7 +352,10 @@ fn main() {
     for record in valid_game_records {
         let progression = UncheckedGameProgression::from_game_record_string(record);
         let final_board = progression.play_through();
-        assert!(test_reachability(&final_board).is_some());
+
+        let result = test_reachability(&final_board);
+        assert!(result.is_some());
+        assert_eq!(final_board, result.unwrap().play_through());
     }
 }
 

@@ -9,7 +9,7 @@ pub struct BitBoard {
     pub black: u64,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BoardCellState {
     Empty = 0,
     White = 1,
@@ -60,7 +60,7 @@ impl CellCoord {
 }
 
 /// Represents a 6x6 Reversi board state.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Board(pub [[BoardCellState; 6]; 6]);
 
 impl Board {
