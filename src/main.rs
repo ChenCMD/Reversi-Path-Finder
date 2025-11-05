@@ -1,4 +1,5 @@
 use easy_smt::{ContextBuilder, Response, SExpr};
+use std::time::Instant;
 
 use reversi_path_finder::board::*;
 use reversi_path_finder::game::*;
@@ -334,19 +335,33 @@ fn test_reachability(final_state: &Board) -> Response {
     let constraints = generate_reversi_constraints(&mut ctx, final_state);
 
     println!("Adding {} constraints to solver...", constraints.len());
-    for (i, constraint) in constraints.iter().enumerate() {
-        if let Err(e) = ctx.assert(*constraint) {
-            panic!(
-                "Error asserting constraint {}: {}, Constraint: {}",
-                i,
-                e,
-                ctx.display(*constraint)
-            );
+    {
+        let assert_start = Instant::now();
+        for (i, constraint) in constraints.iter().enumerate() {
+            if let Err(e) = ctx.assert(*constraint) {
+                panic!(
+                    "Error asserting constraint {}: {}, Constraint: {}",
+                    i,
+                    e,
+                    ctx.display(*constraint)
+                );
+            }
         }
+        println!("Constraints asserted in {:.2?}", assert_start.elapsed());
     }
 
-    println!("Checking satisfiability...");
-    match ctx.check() {
+    let result = {
+        println!("Checking satisfiability...");
+        let check_start = Instant::now();
+        let r = ctx.check();
+        println!(
+            "Satisfiability check completed in {:.2?}",
+            check_start.elapsed()
+        );
+        r
+    };
+
+    match result {
         Ok(Response::Sat) => {
             println!("✓ Result: SAT - This position IS REACHABLE!");
             println!("\nThe final state can be reached through valid Reversi play.");
