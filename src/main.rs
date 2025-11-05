@@ -31,9 +31,9 @@ fn compute_flips_in_direction(
     // Function to shift in the direction (handles both positive and negative shifts)
     let shift_fn = |pos: SExpr| -> SExpr {
         if shift_amount > 0 {
-            ctx.bvlshr(pos, ctx.binary(36, shift_amount as u64))
+            ctx.bvshl(pos, ctx.binary(36, shift_amount as u64))
         } else {
-            ctx.bvshl(pos, ctx.binary(36, (-shift_amount) as u64))
+            ctx.bvlshr(pos, ctx.binary(36, (-shift_amount) as u64))
         }
     };
 
