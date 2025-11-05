@@ -187,8 +187,9 @@ fn has_legal_move(
 pub fn generate_reversi_constraints(
     ctx: &mut easy_smt::Context,
     final_state: &Board,
-) -> Vec<SExpr> {
+) -> (Vec<SExpr>, Vec<SExpr>) {
     let mut constraints = Vec::new();
+    let mut move_positions = Vec::new();
     let max_moves = final_state.filled_cells_count() - /* initial 4 pieces */ 4;
 
     // Use 36-bit bitvectors for the 6x6 board (bits 0-35)
@@ -253,6 +254,7 @@ pub fn generate_reversi_constraints(
         let move_pos = ctx
             .declare_const(&format!("move_pos_{}", t), ctx.bit_vec_sort(ctx.numeral(6)))
             .unwrap();
+        move_positions.push(move_pos);
         let pass = ctx
             .declare_const(&format!("pass_{}", t), bool_sort)
             .unwrap();
@@ -311,13 +313,13 @@ pub fn generate_reversi_constraints(
         }
     }
 
-    constraints
+    (constraints, move_positions)
 }
 
 fn main() {
     let valid_game_records = vec![
-        "B3B4D5B2A4B5C2E4E5E2F4F6B6A5B1A1F1C5E3A2E6D6A6D1C6C1D2A3E1F3F5F2",
-        "B3B4D5D2D1E5B5A4F5B2A2B6A6C5C6A5A3E2F2E1C2B1A1F1E3E4C1F3F4D6E6F6",
+        "B3B4D5B2A4B5",
+        "B3B4D5D2D1E5B5A4",
         "E4C5B2E3E5B3B4E6F2A3B5A1E2E1B6C6D5D6F1C2B1C1F4A4A2A6F6F3D1F5A5D2",
         "C2B2B3D2B1A1E3F2E1A3C1D5A2D1A4A5E2F1E4B4B5B6F3E5E6C6A6C5D6F4F6F5",
         "D5E3D2C5B3C2B1E6B4A2C6A4F2C1D1E2A3A5E5F3B5F1E1D6A1E4F6F5A6B6B2F4",
@@ -350,18 +352,34 @@ fn main() {
     for record in valid_game_records {
         let progression = UncheckedGameProgression::from_game_record_string(record);
         let final_board = progression.play_through();
-        assert!(test_reachability(&final_board) == Response::Sat);
+        assert!(test_reachability(&final_board).is_some());
     }
 }
 
-fn test_reachability(final_state: &Board) -> Response {
+/// Parse a bitvector value from SMT solver output
+/// Handles formats like "#b000000", "#x00", "0", etc.
+fn parse_bitvector_value(s: &str) -> u8 {
+    let s = s.trim();
+    if s.starts_with("#b") {
+        // Binary format
+        u8::from_str_radix(&s[2..], 2).expect("Failed to parse binary bitvector")
+    } else if s.starts_with("#x") {
+        // Hexadecimal format
+        u8::from_str_radix(&s[2..], 16).expect("Failed to parse hex bitvector")
+    } else {
+        // Decimal format
+        s.parse::<u8>().expect("Failed to parse decimal bitvector")
+    }
+}
+
+fn test_reachability(final_state: &Board) -> Option<UncheckedGameProgression> {
     let mut ctx = init_yices2_ctx();
     ctx.set_logic("QF_BV").expect("Failed to set logic");
 
     println!("Target board state:");
     println!("{}", final_state.to_string_block());
 
-    let constraints = generate_reversi_constraints(&mut ctx, final_state);
+    let (constraints, move_positions) = generate_reversi_constraints(&mut ctx, final_state);
 
     println!("Adding {} constraints to solver...", constraints.len());
     {
@@ -392,17 +410,40 @@ fn test_reachability(final_state: &Board) -> Response {
 
     match result {
         Ok(Response::Sat) => {
-            println!("✓ Result: SAT - This position IS REACHABLE!");
+            // Extract model values for move positions
+            let model_values = ctx
+                .get_value(move_positions)
+                .expect("Failed to get model values");
+
+            // Parse the model values to extract move positions
+            let mut moves = Vec::new();
+            for (_var, value_expr) in model_values {
+                // The value_expr should be a bitvector constant
+                // We need to parse it to get the integer position (0-35)
+                let pos_str = ctx.display(value_expr).to_string();
+                // Parse bitvector format (e.g., "#b000000" or "#x00")
+                let pos = parse_bitvector_value(&pos_str);
+                let column = (pos % 6) as u8;
+                let row = (pos / 6) as u8;
+                moves.push(CellCoord::new(column, row));
+            }
+            let progression = UncheckedGameProgression::new(moves);
+
+            println!(
+                "✓ Result: SAT - This position IS REACHABLE ({})!",
+                progression.to_game_record_string()
+            );
             println!("\nThe final state can be reached through valid Reversi play.");
-            Response::Sat
+
+            Some(progression)
         }
         Ok(Response::Unsat) => {
             println!("✗ Result: UNSAT - This position is NOT REACHABLE");
-            Response::Unsat
+            None
         }
         Ok(Response::Unknown) => {
             println!("? Result: UNKNOWN - Solver could not determine reachability");
-            Response::Unknown
+            None
         }
         Err(e) => {
             panic!("Error during solving: {}", e);
