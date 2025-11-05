@@ -131,7 +131,7 @@ impl Board {
         result.push_str("   ABCDEF\n");
         result.push_str("   ------\n");
         for (y, row) in self.0.iter().enumerate() {
-            result.push_str(&format!("{:1} |", y));
+            result.push_str(&format!("{:1} |", y + 1));
             for &cell in row {
                 result.push(match cell {
                     BoardCellState::Empty => '.',

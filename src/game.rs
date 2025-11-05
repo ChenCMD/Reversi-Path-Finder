@@ -21,7 +21,7 @@ pub struct UncheckedGameProgression(Vec<CellCoord>);
 impl UncheckedGameProgression {
     pub fn from_game_record_string(game_record: &str) -> Self {
         let mut specs = vec![];
-        // Parse moves like "B3B2C2..."
+        // Parse moves like "B3B2C2..." (ABCDEF / 123456)
         for move_str in game_record.as_bytes().chunks(2) {
             let column = move_str[0] - b'A';
             let row = move_str[1] - b'1';
@@ -43,9 +43,6 @@ impl UncheckedGameProgression {
         let mut current_player = PlayerColor::Black;
 
         for cell in self.0.iter() {
-            if *cell.column() == 0 && *cell.row() == 0 {
-                break;
-            }
             let actual_player = if board.moves_available(&current_player).is_empty() {
                 current_player.opponent()
             } else {
