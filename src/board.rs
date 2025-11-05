@@ -185,10 +185,10 @@ impl Board {
             let mut current_y = y;
 
             // Look for opponent disks in this direction unless we are about to go out of bounds
-            while (dx > 0 || current_x > 0)
-                && (dx < 0 || current_x < 5)
-                && (dy > 0 || current_y > 0)
-                && (dy < 0 || current_y < 5)
+            while (dx >= 0 || current_x > 0)
+                && (dx <= 0 || current_x < 5)
+                && (dy >= 0 || current_y > 0)
+                && (dy <= 0 || current_y < 5)
             {
                 current_x = (current_x as i32 + dx) as u8;
                 current_y = (current_y as i32 + dy) as u8;
@@ -228,6 +228,35 @@ impl Board {
 
             Some(Board(new_board))
         }
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+
+    #[test]
+    fn test_board_place_disk_at_se_corner() {
+        let before = Board::from_012_array([
+            /*       A  B  C  D  E  F */
+            /* 1 */ [1, 1, 2, 2, 1, 2],
+            /* 2 */ [0, 1, 1, 1, 1, 1],
+            /* 3 */ [2, 0, 1, 1, 1, 2],
+            /* 4 */ [1, 2, 2, 2, 1, 2],
+            /* 5 */ [2, 2, 2, 2, 2, 1],
+            /* 6 */ [0, 2, 1, 1, 1, 0],
+        ]);
+        let expected = Board::from_012_array([
+            /*       A  B  C  D  E  F */
+            /* 1 */ [1, 1, 2, 2, 1, 2],
+            /* 2 */ [0, 1, 1, 1, 1, 1],
+            /* 3 */ [2, 0, 1, 1, 1, 2],
+            /* 4 */ [1, 2, 2, 2, 1, 2],
+            /* 5 */ [2, 2, 2, 2, 2, 2],
+            /* 6 */ [0, 2, 2, 2, 2, 2],
+        ]);
+
+        assert!(before.place_disk(5, 5, &PlayerColor::Black).unwrap() == expected);
     }
 }
 

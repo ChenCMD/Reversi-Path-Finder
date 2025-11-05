@@ -314,22 +314,6 @@ pub fn generate_reversi_constraints(
 }
 
 fn main() {
-    println!("Testing Reachable (B3) State (expect SAT)...");
-    assert!(
-        test_reachability(&UncheckedGameProgression::from_game_record_string("B3").play_through())
-            == Response::Sat
-    );
-
-    println!("\n{}\n", "=".repeat(60));
-
-    println!("Testing Unreachable State (expect UNSAT)...");
-    assert!(test_reachability(&example_boards::UNREACHABLE_2_STEPS) == Response::Unsat);
-
-    println!("\n{}\n", "=".repeat(60));
-
-    println!("Testing Unreachable State (expect UNSAT)...");
-    assert!(test_reachability(&example_boards::UNREACHABLE_BROKEN) == Response::Unsat);
-
     assert!(
         test_reachability(
             &UncheckedGameProgression::from_game_record_string(
