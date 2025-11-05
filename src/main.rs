@@ -1,7 +1,7 @@
 use easy_smt::{ContextBuilder, Response, SExpr};
 
-mod board;
-use board::*;
+use reversi_path_finder::board::*;
+use reversi_path_finder::game::*;
 
 fn init_yices2_ctx() -> easy_smt::Context {
     ContextBuilder::new()
@@ -229,7 +229,7 @@ pub fn generate_reversi_constraints(
 
     // Constraint: Initial board state
     {
-        let BitBoard { black, white } = Board::INITIAL.to_bitboards();
+        let BitBoard { black, white } = INITIAL_BOARD.to_bitboards();
         constraints.push(ctx.eq(black_boards[0], ctx.binary(36, black)));
         constraints.push(ctx.eq(white_boards[0], ctx.binary(36, white)));
     }
@@ -326,6 +326,15 @@ fn main() {
 
     println!("Testing Unreachable State (expect UNSAT)...");
     assert!(test_reachability(&example_boards::UNREACHABLE_BROKEN) == Response::Unsat);
+
+    assert!(
+        test_reachability(
+            &UncheckedGameProgression::from_game_record_string(
+                "C2B4A5A4E5E4C5B2F4D2D1D6C1E1B6E3E2E6A3C6F1A1F3B1B5F2D5F5F6A6B3A2"
+            )
+            .play_through()
+        ) == Response::Sat
+    );
 }
 
 fn test_reachability(final_state: &Board) -> Response {
