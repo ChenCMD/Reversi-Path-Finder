@@ -16,6 +16,12 @@ pub const INITIAL_BOARD: LazyLock<Board> = LazyLock::new(|| {
     ])
 });
 
+pub struct MoveInGame {
+    pub cell: CellCoord,
+    pub player: PlayerColor,
+    pub turn_index: usize,
+}
+
 pub struct UncheckedGameProgression(Vec<CellCoord>);
 
 impl UncheckedGameProgression {
@@ -53,7 +59,10 @@ impl UncheckedGameProgression {
         result
     }
 
-    pub fn play_through(&self) -> Board {
+    fn play_through_and_observe_moves_sequentially(
+        &self,
+        observe: &mut impl FnMut(&Board, &CellCoord, &PlayerColor),
+    ) -> Board {
         let mut board = INITIAL_BOARD.clone();
         let mut current_player = PlayerColor::Black;
 
@@ -64,6 +73,8 @@ impl UncheckedGameProgression {
                 current_player
             };
 
+            observe(&board, cell, &actual_player);
+
             board = board
                 .place_disk(*cell.column(), *cell.row(), &actual_player)
                 .unwrap();
@@ -71,5 +82,23 @@ impl UncheckedGameProgression {
         }
 
         board
+    }
+
+    pub fn play_through(&self) -> Board {
+        self.play_through_and_observe_moves_sequentially(&mut |_, _, _| {})
+    }
+
+    pub fn to_moves(&self) -> Vec<MoveInGame> {
+        let mut moves = Vec::new();
+
+        self.play_through_and_observe_moves_sequentially(&mut |_board, cell, actual_player| {
+            moves.push(MoveInGame {
+                cell: *cell,
+                player: *actual_player,
+                turn_index: moves.len(),
+            })
+        });
+
+        moves
     }
 }

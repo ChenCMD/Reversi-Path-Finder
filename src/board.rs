@@ -306,6 +306,7 @@ impl Board {
 
 /// A mask indicating where a player can place disks.
 /// Each entry is true if placement is allowed, false otherwise.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct PlacementMask(pub [[bool; 6]; 6]);
 
 impl PlacementMask {
@@ -315,6 +316,10 @@ impl PlacementMask {
 
     pub fn can_place(&self, x: u8, y: u8) -> bool {
         self.0[y as usize][x as usize]
+    }
+
+    pub fn can_place_at_cell(&self, cell: CellCoord) -> bool {
+        self.can_place(*cell.column(), *cell.row())
     }
 
     pub fn allow_everywhere() -> Self {
