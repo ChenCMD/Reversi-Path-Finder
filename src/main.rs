@@ -1,8 +1,11 @@
+use rayon::prelude::*;
 use reversi_path_finder::board::{Board, PlacementMask};
 use reversi_path_finder::reachability_problem::{
     ReachabilityProblem, ReachabilitySolver, ReachabilitySolverResult,
 };
 use reversi_path_finder::yices2_kissat_reachability_solver::new_yices2_kissat_reachability_solver;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 fn randomly_generate_end_state() -> Board {
     let mut board_012_array = [[0u8; 6]; 6];
@@ -13,7 +16,25 @@ fn randomly_generate_end_state() -> Board {
 }
 
 fn main() {
-    loop {
+    // Configure rayon to use half the number of CPU cores
+    let num_threads = (num_cpus::get() / 2).max(1);
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(num_threads)
+        .build_global()
+        .unwrap();
+
+    println!("Using {} threads for parallel search\n", num_threads);
+
+    let found = Arc::new(AtomicBool::new(false));
+
+    // Use rayon to search in parallel across infinite attempts
+    // std::iter::repeat creates an infinite iterator, par_bridge makes it parallel
+    let result = std::iter::repeat(()).par_bridge().find_map_any(|_| {
+        // Check if another thread already found a solution
+        if found.load(Ordering::Relaxed) {
+            return None;
+        }
+
         let mut solver = new_yices2_kissat_reachability_solver();
 
         let instance = ReachabilityProblem::new(
@@ -29,19 +50,25 @@ fn main() {
         match result {
             ReachabilitySolverResult::Unreachable => {
                 println!("   → The position is NOT REACHABLE\n");
+                None
             }
             ReachabilitySolverResult::Unknown => {
                 println!("   → UNKNOWN - Solver could not determine reachability\n");
+                None
             }
             ReachabilitySolverResult::Reachable(progression) => {
                 assert!(instance.admits_as_solution(&progression));
-                println!(
-                    "   → Successfully found a progression: {}\n",
-                    &progression.to_game_record_string()
-                );
-                return;
+                found.store(true, Ordering::Relaxed);
+                Some((instance, progression))
             }
         }
+    });
+
+    if let Some((_instance, progression)) = result {
+        println!(
+            "   → Successfully found a progression: {}\n",
+            &progression.to_game_record_string()
+        );
     }
 }
 
