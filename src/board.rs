@@ -155,6 +155,16 @@ impl Board {
         Board(board)
     }
 
+    pub fn black_to_octal_string(&self) -> String {
+        let bb = self.to_bitboards();
+        format!("{:012o}", bb.black.reverse_bits() >> 28)
+    }
+
+    pub fn white_to_octal_string(&self) -> String {
+        let bb = self.to_bitboards();
+        format!("{:012o}", bb.white.reverse_bits() >> 28)
+    }
+
     pub fn to_bitboards(&self) -> BitBoard {
         // We use the following mapping.
         //
@@ -340,6 +350,33 @@ impl PlacementMask {
     ///   6  [s[10]& 0b100] [s[10]& 0b010] [s[10]& 0b001] [s[11]& 0b100] [s[11]& 0b010] [s[11]& 0b001]
     pub fn from_octal_string(octal_str: &str) -> Self {
         PlacementMask(octal_str_to_boolean_board(octal_str))
+    }
+
+    pub fn to_octal_string(&self) -> String {
+        let mut bits: u64 = 0;
+        for y in 0..6 {
+            for x in 0..6 {
+                let pos = (y * 6 + x) as u64;
+                if self.0[y][x] {
+                    bits |= 1 << pos;
+                }
+            }
+        }
+        format!("{:012o}", bits.reverse_bits() >> 28)
+    }
+
+    pub fn to_string_block(&self) -> String {
+        let mut result = String::new();
+        result.push_str("   ABCDEF\n");
+        result.push_str("   ------\n");
+        for (y, row) in self.0.iter().enumerate() {
+            result.push_str(&format!("{:1} |", y + 1));
+            for &cell in row {
+                result.push(if cell { '.' } else { 'X' });
+            }
+            result.push('\n');
+        }
+        result
     }
 }
 
