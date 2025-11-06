@@ -127,7 +127,7 @@ impl Board {
     ///   4  [s[6] & 0b100] [s[6] & 0b010] [s[6] & 0b001] [s[7] & 0b100] [s[7] & 0b010] [s[7] & 0b001]
     ///   5  [s[8] & 0b100] [s[8] & 0b010] [s[8] & 0b001] [s[9] & 0b100] [s[9] & 0b010] [s[9] & 0b001]
     ///   6  [s[10]& 0b100] [s[10]& 0b010] [s[10]& 0b001] [s[11]& 0b100] [s[11]& 0b010] [s[11]& 0b001]
-    pub fn from_octal_string(white_board_octal: &str, black_board_octal: &str) -> Self {
+    pub fn from_octal_strings(white_board_octal: &str, black_board_octal: &str) -> Self {
         let white_board = octal_str_to_boolean_board(white_board_octal);
         let black_board = octal_str_to_boolean_board(black_board_octal);
         let mut board = [[BoardCellState::Empty; 6]; 6];
@@ -372,8 +372,8 @@ pub mod test {
     }
 
     #[test]
-    fn test_from_octal_string_initial() {
-        let board = Board::from_octal_string("000010040000", "000004100000");
+    fn test_from_octal_strings_initial() {
+        let board = Board::from_octal_strings("000010040000", "000004100000");
         let expected = Board::from_012_array([
             /*       A  B  C  D  E  F */
             /* 1 */ [0, 0, 0, 0, 0, 0],
