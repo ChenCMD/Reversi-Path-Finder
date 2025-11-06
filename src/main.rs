@@ -147,6 +147,7 @@ fn has_legal_move(
     ctx: &mut easy_smt::Context,
     player_board: SExpr,
     opponent_board: SExpr,
+    player_can_place: SExpr,
 ) -> SExpr {
     let zero_bv = ctx.binary(36, 0);
     let occupied = ctx.bvor(player_board, opponent_board);
@@ -165,8 +166,10 @@ fn has_legal_move(
         let flips = compute_all_flips(ctx, pos_mask, player_board, opponent_board);
         let has_flips = ctx.distinct(flips, zero_bv);
 
-        // This position is legal if it's empty AND flips pieces
-        let is_legal = ctx.and(is_empty, has_flips);
+        let can_place = ctx.distinct(ctx.bvand(player_can_place, pos_mask), zero_bv);
+
+        // This position is legal if it's empty AND flips pieces AND conforms to placement mask
+        let is_legal = ctx.and(ctx.and(is_empty, has_flips), can_place);
 
         legal_moves.push(is_legal);
     }
@@ -181,13 +184,40 @@ fn has_legal_move(
 /// # Arguments
 /// * `ctx` - The SMT context to use for constraint generation
 /// * `final_state` - The target board state to reach
+/// * `black_pmask` - 6x6 array indicating where Black can place disks
+/// * `white_pmask` - 6x6 array indicating where White can place disks
 ///
 /// # Returns
 /// A vector of SExpr constraints representing the game rules and progression
 pub fn generate_reversi_constraints(
     ctx: &mut easy_smt::Context,
     final_state: &Board,
+    black_pmask: PlacementMask,
+    white_pmask: PlacementMask,
 ) -> (Vec<SExpr>, Vec<SExpr>) {
+    let black_can_place_bv = {
+        let mut bv: u64 = 0;
+        for y in 0..6 {
+            for x in 0..6 {
+                if black_pmask.can_place(x, y) {
+                    bv |= 1 << (y * 6 + x);
+                }
+            }
+        }
+        ctx.binary(36, bv)
+    };
+    let white_can_place_bv = {
+        let mut bv: u64 = 0;
+        for y in 0..6 {
+            for x in 0..6 {
+                if white_pmask.can_place(x, y) {
+                    bv |= 1 << (y * 6 + x);
+                }
+            }
+        }
+        ctx.binary(36, bv)
+    };
+
     let mut constraints = Vec::new();
     let mut move_positions = Vec::new();
     let max_moves = final_state.filled_cells_count() - /* initial 4 pieces */ 4;
@@ -261,6 +291,8 @@ pub fn generate_reversi_constraints(
 
         let black_plays = ctx.xor(is_black_turn[t], pass);
 
+        let placement_mask = ctx.ite(black_plays, black_can_place_bv, white_can_place_bv);
+
         // Create one-hot move mask from move_pos
         let move_mask = {
             let zeros_30 = ctx.binary(30, 0);
@@ -275,12 +307,14 @@ pub fn generate_reversi_constraints(
         // Compute what pieces would be flipped by this move
         let total_flips = compute_all_flips(ctx, move_mask, player_board, opponent_board);
 
-        // Move legality: "Move must be on an empty cell" and "Move must flip at least one piece"
+        // Move legality: "Move must be on an empty cell", "Move must flip at least one piece", "Move must conform to placement mask"
         {
             let occupied = ctx.bvor(black_boards[t], white_boards[t]);
             constraints.push(ctx.eq(ctx.bvand(occupied, move_mask), zero_bv));
 
             constraints.push(ctx.distinct(total_flips, zero_bv));
+
+            constraints.push(ctx.eq(ctx.bvand(placement_mask, move_mask), move_mask));
         }
 
         // Pass validity constraint: "if pass, then current player must have no legal moves"
@@ -288,8 +322,14 @@ pub fn generate_reversi_constraints(
             let current_player_board = ctx.ite(is_black_turn[t], black_boards[t], white_boards[t]);
             let current_opponent_board =
                 ctx.ite(is_black_turn[t], white_boards[t], black_boards[t]);
-            let current_has_moves =
-                has_legal_move(ctx, current_player_board, current_opponent_board);
+            let current_player_can_place =
+                ctx.ite(is_black_turn[t], black_can_place_bv, white_can_place_bv);
+            let current_has_moves = has_legal_move(
+                ctx,
+                current_player_board,
+                current_opponent_board,
+                current_player_can_place,
+            );
 
             // If pass, then current player has no legal moves (pass => !has_moves is equivalent to !pass || !has_moves)
             constraints.push(ctx.or(ctx.not(pass), ctx.not(current_has_moves)));
@@ -353,7 +393,11 @@ fn main() {
         let progression = UncheckedGameProgression::from_game_record_string(record);
         let final_board = progression.play_through();
 
-        let result = test_reachability(&final_board);
+        let result = test_reachability(
+            &final_board,
+            PlacementMask::allow_everywhere(),
+            PlacementMask::allow_everywhere(),
+        );
         assert!(result.is_some());
         assert_eq!(final_board, result.unwrap().play_through());
     }
@@ -375,14 +419,19 @@ fn parse_bitvector_value(s: &str) -> u8 {
     }
 }
 
-fn test_reachability(final_state: &Board) -> Option<UncheckedGameProgression> {
+fn test_reachability(
+    final_state: &Board,
+    black_pmask: PlacementMask,
+    white_pmask: PlacementMask,
+) -> Option<UncheckedGameProgression> {
     let mut ctx = init_yices2_ctx();
     ctx.set_logic("QF_BV").expect("Failed to set logic");
 
     println!("Target board state:");
     println!("{}", final_state.to_string_block());
 
-    let (constraints, move_positions) = generate_reversi_constraints(&mut ctx, final_state);
+    let (constraints, move_positions) =
+        generate_reversi_constraints(&mut ctx, final_state, black_pmask, white_pmask);
 
     println!("Adding {} constraints to solver...", constraints.len());
     {
@@ -433,10 +482,9 @@ fn test_reachability(final_state: &Board) -> Option<UncheckedGameProgression> {
             let progression = UncheckedGameProgression::new(moves);
 
             println!(
-                "✓ Result: SAT - This position IS REACHABLE ({})!",
+                "✓ Result: SAT - This position IS REACHABLE ({})! The final state can be reached through valid Reversi play.",
                 progression.to_game_record_string()
             );
-            println!("\nThe final state can be reached through valid Reversi play.");
 
             Some(progression)
         }

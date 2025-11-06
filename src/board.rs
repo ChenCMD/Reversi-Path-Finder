@@ -59,6 +59,38 @@ impl CellCoord {
     }
 }
 
+/// Converts an octal string representation of a bitboard into a 6x6 boolean array.
+///
+/// The octal string should represent 36 bits each, corresponding to the 6x6 board.
+/// The mapping from string (`s`) to board cells is as follows (s[i] is the octal digit at position i):
+///
+/// Board:
+///                  A              B              C              D              E              F
+///   1  [s[0] & 0b100] [s[0] & 0b010] [s[0] & 0b001] [s[1] & 0b100] [s[1] & 0b010] [s[1] & 0b001]
+///   2  [s[2] & 0b100] [s[2] & 0b010] [s[2] & 0b001] [s[3] & 0b100] [s[3] & 0b010] [s[3] & 0b001]
+///   3  [s[4] & 0b100] [s[4] & 0b010] [s[4] & 0b001] [s[5] & 0b100] [s[5] & 0b010] [s[5] & 0b001]
+///   4  [s[6] & 0b100] [s[6] & 0b010] [s[6] & 0b001] [s[7] & 0b100] [s[7] & 0b010] [s[7] & 0b001]
+///   5  [s[8] & 0b100] [s[8] & 0b010] [s[8] & 0b001] [s[9] & 0b100] [s[9] & 0b010] [s[9] & 0b001]
+///   6  [s[10]& 0b100] [s[10]& 0b010] [s[10]& 0b001] [s[11]& 0b100] [s[11]& 0b010] [s[11]& 0b001]
+fn octal_str_to_boolean_board(octal_str: &str) -> [[bool; 6]; 6] {
+    if octal_str.len() != 12 {
+        panic!("Octal string must be 12 characters long to represent 36 bits");
+    }
+
+    let bits = u64::from_str_radix(octal_str, 8).expect("Invalid octal string for bitboard");
+
+    let mut board = [[false; 6]; 6];
+
+    for y in 0..6 {
+        for x in 0..6 {
+            let pos = (y * 6 + x) as u64;
+            board[y][x] = (bits >> (35 - pos)) & 1 == 1;
+        }
+    }
+
+    board
+}
+
 /// Represents a 6x6 Reversi board state.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Board(pub [[BoardCellState; 6]; 6]);
@@ -79,6 +111,47 @@ impl Board {
                 };
             }
         }
+        Board(board)
+    }
+
+    /// Creates a Board from two octal strings representing black and white bitboards.
+    ///
+    /// The octal strings should represent 36 bits each, corresponding to the 6x6 board.
+    /// The mapping from string (`s`) to board cells is as follows (s[i] is the octal digit at position i):
+    ///
+    /// Board:
+    ///                  A              B              C              D              E              F
+    ///   1  [s[0] & 0b100] [s[0] & 0b010] [s[0] & 0b001] [s[1] & 0b100] [s[1] & 0b010] [s[1] & 0b001]
+    ///   2  [s[2] & 0b100] [s[2] & 0b010] [s[2] & 0b001] [s[3] & 0b100] [s[3] & 0b010] [s[3] & 0b001]
+    ///   3  [s[4] & 0b100] [s[4] & 0b010] [s[4] & 0b001] [s[5] & 0b100] [s[5] & 0b010] [s[5] & 0b001]
+    ///   4  [s[6] & 0b100] [s[6] & 0b010] [s[6] & 0b001] [s[7] & 0b100] [s[7] & 0b010] [s[7] & 0b001]
+    ///   5  [s[8] & 0b100] [s[8] & 0b010] [s[8] & 0b001] [s[9] & 0b100] [s[9] & 0b010] [s[9] & 0b001]
+    ///   6  [s[10]& 0b100] [s[10]& 0b010] [s[10]& 0b001] [s[11]& 0b100] [s[11]& 0b010] [s[11]& 0b001]
+    pub fn from_octal_string(white_board_octal: &str, black_board_octal: &str) -> Self {
+        let white_board = octal_str_to_boolean_board(white_board_octal);
+        let black_board = octal_str_to_boolean_board(black_board_octal);
+        let mut board = [[BoardCellState::Empty; 6]; 6];
+
+        for y in 0..6 {
+            for x in 0..6 {
+                let is_black = black_board[y][x];
+                let is_white = white_board[y][x];
+
+                board[y][x] = if is_black && is_white {
+                    panic!(
+                        "Invalid bitboard: overlapping pieces at position ({}, {})",
+                        x, y
+                    )
+                } else if is_black {
+                    BoardCellState::Black
+                } else if is_white {
+                    BoardCellState::White
+                } else {
+                    BoardCellState::Empty
+                }
+            }
+        }
+
         Board(board)
     }
 
@@ -231,6 +304,40 @@ impl Board {
     }
 }
 
+/// A mask indicating where a player can place disks.
+/// Each entry is true if placement is allowed, false otherwise.
+pub struct PlacementMask(pub [[bool; 6]; 6]);
+
+impl PlacementMask {
+    pub fn from_bool_array(arr: [[bool; 6]; 6]) -> Self {
+        PlacementMask(arr)
+    }
+
+    pub fn can_place(&self, x: u8, y: u8) -> bool {
+        self.0[y as usize][x as usize]
+    }
+
+    pub fn allow_everywhere() -> Self {
+        PlacementMask([[true; 6]; 6])
+    }
+
+    /// Creates a PlacementMask from an octal string representation of a bitboard.
+    ///
+    /// The mapping from string (`s := octal_str`) to board cells is as follows (s[i] is the octal digit at position i):
+    ///
+    /// Board:
+    ///                  A              B              C              D              E              F
+    ///   1  [s[0] & 0b100] [s[0] & 0b010] [s[0] & 0b001] [s[1] & 0b100] [s[1] & 0b010] [s[1] & 0b001]
+    ///   2  [s[2] & 0b100] [s[2] & 0b010] [s[2] & 0b001] [s[3] & 0b100] [s[3] & 0b010] [s[3] & 0b001]
+    ///   3  [s[4] & 0b100] [s[4] & 0b010] [s[4] & 0b001] [s[5] & 0b100] [s[5] & 0b010] [s[5] & 0b001]
+    ///   4  [s[6] & 0b100] [s[6] & 0b010] [s[6] & 0b001] [s[7] & 0b100] [s[7] & 0b010] [s[7] & 0b001]
+    ///   5  [s[8] & 0b100] [s[8] & 0b010] [s[8] & 0b001] [s[9] & 0b100] [s[9] & 0b010] [s[9] & 0b001]
+    ///   6  [s[10]& 0b100] [s[10]& 0b010] [s[10]& 0b001] [s[11]& 0b100] [s[11]& 0b010] [s[11]& 0b001]
+    pub fn from_octal_string(octal_str: &str) -> Self {
+        PlacementMask(octal_str_to_boolean_board(octal_str))
+    }
+}
+
 #[cfg(test)]
 pub mod test {
     use super::*;
@@ -257,6 +364,21 @@ pub mod test {
         ]);
 
         assert!(before.place_disk(5, 5, &PlayerColor::Black).unwrap() == expected);
+    }
+
+    #[test]
+    fn test_from_octal_string_initial() {
+        let board = Board::from_octal_string("000010040000", "000004100000");
+        let expected = Board::from_012_array([
+            /*       A  B  C  D  E  F */
+            /* 1 */ [0, 0, 0, 0, 0, 0],
+            /* 2 */ [0, 0, 0, 0, 0, 0],
+            /* 3 */ [0, 0, 1, 2, 0, 0],
+            /* 4 */ [0, 0, 2, 1, 0, 0],
+            /* 5 */ [0, 0, 0, 0, 0, 0],
+            /* 6 */ [0, 0, 0, 0, 0, 0],
+        ]);
+        assert_eq!(board, expected);
     }
 }
 
