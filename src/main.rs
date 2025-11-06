@@ -1,74 +1,103 @@
-use rayon::prelude::*;
+use rand::seq::IndexedRandom;
 use reversi_path_finder::board::{Board, PlacementMask};
+use reversi_path_finder::game::INITIAL_BOARD;
 use reversi_path_finder::reachability_problem::{
     ReachabilityProblem, ReachabilitySolver, ReachabilitySolverResult,
 };
 use reversi_path_finder::yices2_kissat_reachability_solver::new_yices2_kissat_reachability_solver;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 
-fn randomly_generate_end_state() -> Board {
-    let mut board_012_array = [[0u8; 6]; 6];
-    for i in 0..36 {
-        board_012_array[i / 6][i % 6] = (rand::random::<u8>() % 2) + 1;
+fn randomly_play_in_conformance_to_masks(
+    black_mask: &PlacementMask,
+    white_mask: &PlacementMask,
+) -> Board {
+    let mask_for = |player: &reversi_path_finder::board::PlayerColor| match player {
+        reversi_path_finder::board::PlayerColor::Black => black_mask,
+        reversi_path_finder::board::PlayerColor::White => white_mask,
+    };
+
+    let moves_available_for = |board: &Board, player: &reversi_path_finder::board::PlayerColor| {
+        board
+            .moves_available(player)
+            .into_iter()
+            .filter(|cell| mask_for(player).can_place_at_cell(*cell))
+            .collect::<Vec<_>>()
+    };
+
+    'outer: loop {
+        let mut board = INITIAL_BOARD.clone();
+        let mut current_player = reversi_path_finder::board::PlayerColor::Black;
+
+        for _ in 0..32 {
+            let moves_available_current = moves_available_for(&board, &current_player);
+
+            let actual_player = if moves_available_current.is_empty() {
+                current_player.opponent()
+            } else {
+                current_player
+            };
+
+            let randomly_picked_move = {
+                let moves_available_actual = if actual_player == current_player {
+                    moves_available_current
+                } else {
+                    moves_available_for(&board, &current_player.opponent())
+                };
+
+                if moves_available_actual.is_empty() {
+                    continue 'outer;
+                }
+
+                moves_available_actual
+                    .choose(&mut rand::rng())
+                    .unwrap()
+                    .clone()
+            };
+
+            board = board
+                .place_disk(
+                    *randomly_picked_move.column(),
+                    *randomly_picked_move.row(),
+                    &actual_player,
+                )
+                .unwrap();
+            current_player = actual_player.opponent();
+        }
+
+        return board;
     }
-    Board::from_012_array(board_012_array)
 }
 
 fn main() {
-    // Configure rayon to use half the number of CPU cores
-    let num_threads = (num_cpus::get() / 2).max(1);
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(num_threads)
-        .build_global()
-        .unwrap();
+    let mut solver = new_yices2_kissat_reachability_solver();
 
-    println!("Using {} threads for parallel search\n", num_threads);
+    let instance = {
+        let black_mask = PlacementMask::from_octal_string("737777737752");
+        let white_mask = PlacementMask::from_octal_string("377675777677");
+        ReachabilityProblem::new(
+            randomly_play_in_conformance_to_masks(&black_mask, &white_mask),
+            black_mask,
+            white_mask,
+        )
+    };
 
-    let found = Arc::new(AtomicBool::new(false));
+    print_instance(&instance);
 
-    // Use rayon to search in parallel across infinite attempts
-    // std::iter::repeat creates an infinite iterator, par_bridge makes it parallel
-    let result = std::iter::repeat(()).par_bridge().find_map_any(|_| {
-        // Check if another thread already found a solution
-        if found.load(Ordering::Relaxed) {
-            return None;
+    let result = solver.solve(&instance);
+
+    match result {
+        ReachabilitySolverResult::Unreachable => {
+            println!("   → The position is NOT REACHABLE\n");
         }
-
-        let mut solver = new_yices2_kissat_reachability_solver();
-
-        let instance = ReachabilityProblem::new(
-            randomly_generate_end_state(),
-            PlacementMask::from_octal_string("777777737773"),
-            PlacementMask::from_octal_string("777677777677"),
-        );
-
-        print_instance(&instance);
-
-        let result = solver.solve(&instance);
-
-        match result {
-            ReachabilitySolverResult::Unreachable => {
-                println!("   → The position is NOT REACHABLE\n");
-                None
-            }
-            ReachabilitySolverResult::Unknown => {
-                println!("   → UNKNOWN - Solver could not determine reachability\n");
-                None
-            }
-            ReachabilitySolverResult::Reachable(progression) => {
-                assert!(instance.admits_as_solution(&progression));
-                found.store(true, Ordering::Relaxed);
-                Some((instance, progression))
-            }
+        ReachabilitySolverResult::Unknown => {
+            println!("   → UNKNOWN - Solver could not determine reachability\n");
         }
-    });
-
-    if let Some((_instance, progression)) = result {
-        println!(
-            "   → Successfully found a progression: {}\n",
-            &progression.to_game_record_string()
-        );
+        ReachabilitySolverResult::Reachable(progression) => {
+            assert!(instance.admits_as_solution(&progression));
+            println!(
+                "   → Successfully found a progression: {}\n",
+                &progression.to_game_record_string()
+            );
+        }
     }
 }
 
