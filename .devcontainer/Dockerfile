@@ -11,9 +11,13 @@ RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhisto
 
 # Used to store Claude configuration files
 RUN mkdir /home/$USERNAME/.claude && chown -R $USERNAME /home/$USERNAME/.claude
+# Used to store Codex configuration files
+RUN mkdir /home/$USERNAME/.codex && chown -R $USERNAME /home/$USERNAME/.codex
 
 # Alias to run Claude with dangerously-skip-permissions flag
 RUN echo "alias claude='claude --dangerously-skip-permissions'" >> /etc/bash.bashrc
+# Alias to run Codex with dangerously-bypass-approvals-and-sandbox flag
+RUN echo "alias codex='codex --dangerously-bypass-approvals-and-sandbox'" >> /etc/bash.bashrc
 
 # Install Yices2 SMT solver dependencies
 RUN apt-get update && apt-get install -y \
