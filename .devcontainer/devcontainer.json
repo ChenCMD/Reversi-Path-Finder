@@ -8,7 +8,8 @@
         "context": "."
     },
     "features": {
-        "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+        "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {},
+        "ghcr.io/jsburckhardt/devcontainer-features/codex:1": {}
     },
     "customizations": {
         "vscode": {
