@@ -17,6 +17,61 @@ fn player_to_string(player: &PlayerColor) -> &'static str {
     }
 }
 
+fn debug_invalid_solution(
+    game_trace: &GameTrace,
+    black_mask: &PlacementMask,
+    white_mask: &PlacementMask,
+) {
+    println!("   → ❌ WARNING: Solution validation FAILED!");
+    println!("\n=== SMT SOLVER TRACE (What the solver thinks happened) ===\n");
+    println!("SMT Solver generated {} steps\n", game_trace.steps.len());
+
+    println!("=== Initial Board ===");
+    print!("{}", INITIAL_BOARD.to_visual_string_block());
+    println!();
+
+    for (i, step) in game_trace.steps.iter().enumerate() {
+        println!("=== Step {} ===", i + 1);
+        println!("Player: {}", player_to_string(&step.player));
+        println!("Move: {}", step.move_cell.to_string());
+        println!("Pass: {}", step.is_pass);
+
+        // Check placement mask
+        let mask_ok = match step.player {
+            PlayerColor::Black => black_mask.can_place_at_cell(step.move_cell),
+            PlayerColor::White => white_mask.can_place_at_cell(step.move_cell),
+        };
+
+        if !step.is_pass && !mask_ok {
+            println!(
+                "  ❌ MASK VIOLATION: {} cannot place at {}",
+                player_to_string(&step.player),
+                step.move_cell.to_string()
+            );
+        }
+
+        // Check if player had available moves
+        let available_moves = step.board_before.moves_available(&step.player);
+        let has_moves = !available_moves.is_empty();
+
+        println!("  Player had {} available moves", available_moves.len());
+
+        if step.is_pass && has_moves {
+            println!(
+                "  ❌ INVALID PASS: Player passed but had {} available moves!",
+                available_moves.len()
+            );
+        } else if !step.is_pass && !has_moves {
+            println!("  ❌ MISSING PASS: Player has no moves but didn't pass!");
+        }
+
+        println!();
+    }
+
+    println!("=== Final Board (from SMT) ===");
+    print!("{}", game_trace.final_board.to_visual_string_block());
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() != 5 {
@@ -53,57 +108,12 @@ fn main() {
             );
 
             if !instance.admits_as_solution(&progression) {
-                println!("   → ❌ WARNING: Solution validation FAILED!");
-                println!("\n=== SMT SOLVER TRACE (What the solver thinks happened) ===\n");
-
                 let game_trace = GameTrace::from_solver_trace(&trace);
-                println!("SMT Solver generated {} steps\n", game_trace.steps.len());
-
-                println!("=== Initial Board ===");
-                print!("{}", INITIAL_BOARD.to_visual_string_block());
-                println!();
-
-                for (i, step) in game_trace.steps.iter().enumerate() {
-                    println!("=== Step {} ===", i + 1);
-                    println!("Player: {}", player_to_string(&step.player));
-                    println!("Move: {}", step.move_cell.to_string());
-                    println!("Pass: {}", step.is_pass);
-
-                    // Check placement mask
-                    let mask_ok = match step.player {
-                        PlayerColor::Black => black_mask.can_place_at_cell(step.move_cell),
-                        PlayerColor::White => white_mask.can_place_at_cell(step.move_cell),
-                    };
-
-                    if !step.is_pass && !mask_ok {
-                        println!("  ❌ MASK VIOLATION: {} cannot place at {}",
-                                player_to_string(&step.player), step.move_cell.to_string());
-                    }
-
-                    // Check if player had available moves
-                    let available_moves = step.board_before.moves_available(&step.player);
-                    let has_moves = !available_moves.is_empty();
-
-                    println!("  Player had {} available moves", available_moves.len());
-
-                    if step.is_pass && has_moves {
-                        println!("  ❌ INVALID PASS: Player passed but had {} available moves!", available_moves.len());
-                    } else if !step.is_pass && !has_moves {
-                        println!("  ❌ MISSING PASS: Player has no moves but didn't pass!");
-                    }
-
-                    println!();
-                }
-
-                println!("=== Final Board (from SMT) ===");
-                print!("{}", game_trace.final_board.to_visual_string_block());
-
+                debug_invalid_solution(&game_trace, &black_mask, &white_mask);
                 process::exit(1);
             }
 
-            println!(
-                "   → ✓ Solution validated successfully\n"
-            );
+            println!("   → ✓ Solution validated successfully\n");
         }
     }
 }
