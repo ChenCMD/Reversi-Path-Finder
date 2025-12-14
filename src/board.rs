@@ -155,6 +155,25 @@ impl Board {
         Board(board)
     }
 
+    /// Creates a Board from black and white bitboards (u64 values).
+    /// Each bit in the bitboard represents a cell position (0-35 for the 6x6 board).
+    pub fn from_bitboards(black_bitboard: u64, white_bitboard: u64) -> Self {
+        let mut cells = [[BoardCellState::Empty; 6]; 6];
+        for row in 0..6 {
+            for col in 0..6 {
+                let bit_index = row * 6 + col;
+                let bit_mask = 1u64 << bit_index;
+
+                if black_bitboard & bit_mask != 0 {
+                    cells[row][col] = BoardCellState::Black;
+                } else if white_bitboard & bit_mask != 0 {
+                    cells[row][col] = BoardCellState::White;
+                }
+            }
+        }
+        Board(cells)
+    }
+
     pub fn black_to_octal_string(&self) -> String {
         let bb = self.to_bitboards();
         format!("{:012o}", bb.black.reverse_bits() >> 28)
@@ -221,6 +240,27 @@ impl Board {
                     BoardCellState::White => 'W',
                     BoardCellState::Black => 'B',
                 });
+            }
+            result.push('\n');
+        }
+        result
+    }
+
+    /// Returns a visual string representation of the board using unicode symbols.
+    /// Uses · for empty, ○ for black, ● for white.
+    pub fn to_visual_string_block(&self) -> String {
+        let mut result = String::new();
+        result.push_str("   A B C D E F\n");
+        for (y, row) in self.0.iter().enumerate() {
+            result.push_str(&format!("{} ", y + 1));
+            for &cell in row {
+                let symbol = match cell {
+                    BoardCellState::Empty => "·",
+                    BoardCellState::Black => "○",
+                    BoardCellState::White => "●",
+                };
+                result.push(' ');
+                result.push_str(symbol);
             }
             result.push('\n');
         }

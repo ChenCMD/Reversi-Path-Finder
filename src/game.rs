@@ -62,7 +62,7 @@ impl UncheckedGameProgression {
     fn play_through_and_observe_moves_sequentially(
         &self,
         observe: &mut impl FnMut(&Board, &CellCoord, &PlayerColor),
-    ) -> Board {
+    ) -> Option<Board> {
         let mut board = INITIAL_BOARD.clone();
         let mut current_player = PlayerColor::Black;
 
@@ -75,23 +75,21 @@ impl UncheckedGameProgression {
 
             observe(&board, cell, &actual_player);
 
-            board = board
-                .place_disk(*cell.column(), *cell.row(), &actual_player)
-                .unwrap();
+            board = board.place_disk(*cell.column(), *cell.row(), &actual_player)?;
             current_player = actual_player.opponent();
         }
 
-        board
+        Some(board)
     }
 
-    pub fn play_through(&self) -> Board {
+    pub fn play_through(&self) -> Option<Board> {
         self.play_through_and_observe_moves_sequentially(&mut |_, _, _| {})
     }
 
     pub fn to_moves(&self) -> Vec<MoveInGame> {
         let mut moves = Vec::new();
 
-        self.play_through_and_observe_moves_sequentially(&mut |_board, cell, actual_player| {
+        let _ = self.play_through_and_observe_moves_sequentially(&mut |_board, cell, actual_player| {
             moves.push(MoveInGame {
                 cell: *cell,
                 player: *actual_player,

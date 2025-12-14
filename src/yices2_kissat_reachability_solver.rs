@@ -8,6 +8,94 @@ use crate::{
     reachability_problem::{ReachabilityProblem, ReachabilitySolver, ReachabilitySolverResult},
 };
 
+/// Trace of all intermediate SMT variables extracted from the solver
+#[derive(Debug, Clone)]
+pub struct SolverTrace {
+    pub black_bitboards: Vec<u64>,  // black_bitboard_t for each timestep (0 to max_moves)
+    pub white_bitboards: Vec<u64>,  // white_bitboard_t for each timestep
+    pub is_black_turns: Vec<bool>,  // is_black_turn_t for each timestep
+    pub move_positions: Vec<u8>,    // move_pos_t for each transition (0-35)
+    pub passes: Vec<bool>,          // pass_t for each transition
+}
+
+/// Represents a single step in the game trace
+#[derive(Clone)]
+pub struct GameStep {
+    pub board_before: Board,     // Board state before this move
+    pub player: crate::board::PlayerColor,  // Player making the move
+    pub move_cell: crate::board::CellCoord, // Position of the move
+    pub is_pass: bool,           // Whether this was a pass
+}
+
+/// High-level game trace parsed from raw SMT variables
+#[derive(Clone)]
+pub struct GameTrace {
+    pub steps: Vec<GameStep>,
+    pub final_board: Board,
+}
+
+impl GameTrace {
+    /// Converts raw SolverTrace into a high-level GameTrace
+    pub fn from_solver_trace(trace: &SolverTrace) -> Self {
+        let mut steps = Vec::new();
+
+        for t in 0..trace.move_positions.len() {
+            let board_before = Board::from_bitboards(
+                trace.black_bitboards[t],
+                trace.white_bitboards[t],
+            );
+
+            let prev_is_black = if t < trace.is_black_turns.len() {
+                trace.is_black_turns[t]
+            } else {
+                true // Default to black for first move
+            };
+
+            let is_pass = trace.passes[t];
+            let actual_player_is_black = if is_pass {
+                !prev_is_black
+            } else {
+                prev_is_black
+            };
+
+            let player = if actual_player_is_black {
+                crate::board::PlayerColor::Black
+            } else {
+                crate::board::PlayerColor::White
+            };
+
+            let move_pos = trace.move_positions[t];
+            let col = move_pos % 6;
+            let row = move_pos / 6;
+            let move_cell = crate::board::CellCoord::new(col, row);
+
+            steps.push(GameStep {
+                board_before,
+                player,
+                move_cell,
+                is_pass,
+            });
+        }
+
+        let final_board = Board::from_bitboards(
+            *trace.black_bitboards.last().unwrap(),
+            *trace.white_bitboards.last().unwrap(),
+        );
+
+        GameTrace { steps, final_board }
+    }
+}
+
+/// Result of generating Reversi constraints for SMT solving
+pub struct ReversiConstraints {
+    pub constraints: Vec<SExpr>,
+    pub move_positions: Vec<SExpr>,
+    pub black_boards: Vec<SExpr>,
+    pub white_boards: Vec<SExpr>,
+    pub is_black_turn: Vec<SExpr>,
+    pub passes: Vec<SExpr>,
+}
+
 /// Helper function to compute which pieces would be flipped in a specific direction.
 /// Returns a bitvector mask of pieces that would be flipped.
 fn compute_flips_in_direction(
@@ -186,7 +274,7 @@ pub fn generate_reversi_constraints(
     final_state: &Board,
     black_pmask: PlacementMask,
     white_pmask: PlacementMask,
-) -> (Vec<SExpr>, Vec<SExpr>) {
+) -> ReversiConstraints {
     let black_can_place_bv = {
         let mut bv: u64 = 0;
         for y in 0..6 {
@@ -212,6 +300,7 @@ pub fn generate_reversi_constraints(
 
     let mut constraints = Vec::new();
     let mut move_positions = Vec::new();
+    let mut passes = Vec::new();
     let max_moves = final_state.filled_cells_count() - /* initial 4 pieces */ 4;
 
     // Use 36-bit bitvectors for the 6x6 board (bits 0-35)
@@ -280,6 +369,7 @@ pub fn generate_reversi_constraints(
         let pass = ctx
             .declare_const(&format!("pass_{}", t), bool_sort)
             .unwrap();
+        passes.push(pass);
 
         let black_plays = ctx.xor(is_black_turn[t], pass);
 
@@ -345,7 +435,14 @@ pub fn generate_reversi_constraints(
         }
     }
 
-    (constraints, move_positions)
+    ReversiConstraints {
+        constraints,
+        move_positions,
+        black_boards,
+        white_boards,
+        is_black_turn,
+        passes,
+    }
 }
 
 /// Parse a bitvector value from SMT solver output
@@ -364,10 +461,38 @@ fn parse_bitvector_value(s: &str) -> u8 {
     }
 }
 
-struct Yices2KissatSolver;
+/// Parse a 36-bit bitboard value from SMT solver output
+fn parse_bitboard_value(s: &str) -> u64 {
+    let s = s.trim();
+    if s.starts_with("#b") {
+        u64::from_str_radix(&s[2..], 2).expect("Failed to parse binary bitboard")
+    } else if s.starts_with("#x") {
+        u64::from_str_radix(&s[2..], 16).expect("Failed to parse hex bitboard")
+    } else {
+        s.parse::<u64>().expect("Failed to parse decimal bitboard")
+    }
+}
+
+/// Parse a boolean value from SMT solver output
+fn parse_bool_value(s: &str) -> bool {
+    let s = s.trim();
+    match s {
+        "true" => true,
+        "false" => false,
+        _ => panic!("Failed to parse boolean value: {}", s),
+    }
+}
+
+pub struct Yices2KissatSolver;
 
 impl ReachabilitySolver for Yices2KissatSolver {
-    fn solve(&mut self, problem: &ReachabilityProblem) -> ReachabilitySolverResult {
+    type ExtraTraceDataOnSAT = SolverTrace;
+    type ExtraTraceDataOnUNSAT = ();
+
+    fn solve(
+        &mut self,
+        problem: &ReachabilityProblem,
+    ) -> ReachabilitySolverResult<Self::ExtraTraceDataOnSAT, Self::ExtraTraceDataOnUNSAT> {
         let mut ctx = ContextBuilder::new()
             .solver("yices-smt2")
             .solver_args(["--delegate=kissat"])
@@ -375,12 +500,19 @@ impl ReachabilitySolver for Yices2KissatSolver {
             .expect("Failed to create SMT context with Yices2");
         ctx.set_logic("QF_BV").expect("Failed to set logic");
 
-        let (constraints, move_positions) = generate_reversi_constraints(
+        let reversi_constraints = generate_reversi_constraints(
             &mut ctx,
             &problem.target_board,
             problem.black_placement_mask,
             problem.white_placement_mask,
         );
+
+        let constraints = &reversi_constraints.constraints;
+        let move_positions = reversi_constraints.move_positions;
+        let black_boards = reversi_constraints.black_boards;
+        let white_boards = reversi_constraints.white_boards;
+        let is_black_turn_vars = reversi_constraints.is_black_turn;
+        let passes = reversi_constraints.passes;
 
         println!("Adding {} constraints to solver...", constraints.len());
         {
@@ -413,26 +545,70 @@ impl ReachabilitySolver for Yices2KissatSolver {
             Ok(Response::Sat) => {
                 // Extract model values for move positions
                 let model_values = ctx
-                    .get_value(move_positions)
+                    .get_value(move_positions.clone())
                     .expect("Failed to get model values");
 
                 // Parse the model values to extract move positions
                 let mut moves = Vec::new();
+                let mut move_pos_values = Vec::new();
                 for (_var, value_expr) in model_values {
-                    // The value_expr should be a bitvector constant
-                    // We need to parse it to get the integer position (0-35)
                     let pos_str = ctx.display(value_expr).to_string();
-                    // Parse bitvector format (e.g., "#b000000" or "#x00")
                     let pos = parse_bitvector_value(&pos_str);
+                    move_pos_values.push(pos);
                     let column = (pos % 6) as u8;
                     let row = (pos / 6) as u8;
                     moves.push(CellCoord::new(column, row));
                 }
                 let progression = UncheckedGameProgression::new(moves);
 
-                ReachabilitySolverResult::Reachable(progression)
+                // Extract all intermediate variables for the trace
+                let black_bitboard_values = black_boards
+                    .iter()
+                    .map(|&var| {
+                        let model = ctx.get_value(vec![var]).expect("Failed to get bitboard");
+                        let val_str = ctx.display(model[0].1).to_string();
+                        parse_bitboard_value(&val_str)
+                    })
+                    .collect();
+
+                let white_bitboard_values = white_boards
+                    .iter()
+                    .map(|&var| {
+                        let model = ctx.get_value(vec![var]).expect("Failed to get bitboard");
+                        let val_str = ctx.display(model[0].1).to_string();
+                        parse_bitboard_value(&val_str)
+                    })
+                    .collect();
+
+                let is_black_turn_values = is_black_turn_vars
+                    .iter()
+                    .map(|&var| {
+                        let model = ctx.get_value(vec![var]).expect("Failed to get turn");
+                        let val_str = ctx.display(model[0].1).to_string();
+                        parse_bool_value(&val_str)
+                    })
+                    .collect();
+
+                let pass_values = passes
+                    .iter()
+                    .map(|&var| {
+                        let model = ctx.get_value(vec![var]).expect("Failed to get pass");
+                        let val_str = ctx.display(model[0].1).to_string();
+                        parse_bool_value(&val_str)
+                    })
+                    .collect();
+
+                let trace = SolverTrace {
+                    black_bitboards: black_bitboard_values,
+                    white_bitboards: white_bitboard_values,
+                    is_black_turns: is_black_turn_values,
+                    move_positions: move_pos_values,
+                    passes: pass_values,
+                };
+
+                ReachabilitySolverResult::Reachable(progression, trace)
             }
-            Ok(Response::Unsat) => ReachabilitySolverResult::Unreachable,
+            Ok(Response::Unsat) => ReachabilitySolverResult::Unreachable(()),
             Ok(Response::Unknown) => ReachabilitySolverResult::Unknown,
             Err(e) => {
                 panic!("Error during solving: {}", e);
@@ -441,6 +617,6 @@ impl ReachabilitySolver for Yices2KissatSolver {
     }
 }
 
-pub fn new_yices2_kissat_reachability_solver() -> impl ReachabilitySolver {
+pub fn new_yices2_kissat_reachability_solver() -> Yices2KissatSolver {
     Yices2KissatSolver
 }
