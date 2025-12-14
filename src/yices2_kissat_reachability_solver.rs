@@ -11,20 +11,21 @@ use crate::{
 /// Trace of all intermediate SMT variables extracted from the solver
 #[derive(Debug, Clone)]
 pub struct SolverTrace {
-    pub black_bitboards: Vec<u64>,  // black_bitboard_t for each timestep (0 to max_moves)
-    pub white_bitboards: Vec<u64>,  // white_bitboard_t for each timestep
-    pub is_black_turns: Vec<bool>,  // is_black_turn_t for each timestep
-    pub move_positions: Vec<u8>,    // move_pos_t for each transition (0-35)
-    pub passes: Vec<bool>,          // pass_t for each transition
+    pub black_bitboards: Vec<u64>, // black_bitboard_t for each timestep (0 to max_moves)
+    pub white_bitboards: Vec<u64>, // white_bitboard_t for each timestep
+    pub is_black_turns: Vec<bool>, // is_black_turn_t for each timestep
+    pub move_positions: Vec<u8>,   // move_pos_t for each transition (0-35)
+    pub passes: Vec<bool>,         // pass_t for each transition
+    pub has_moves: Vec<bool>, // has_moves_t for each transition (what solver thinks about move availability)
 }
 
 /// Represents a single step in the game trace
 #[derive(Clone)]
 pub struct GameStep {
-    pub board_before: Board,     // Board state before this move
+    pub board_before: Board,                // Board state before this move
     pub player: crate::board::PlayerColor,  // Player making the move
     pub move_cell: crate::board::CellCoord, // Position of the move
-    pub is_pass: bool,           // Whether this was a pass
+    pub is_pass: bool,                      // Whether this was a pass
 }
 
 /// High-level game trace parsed from raw SMT variables
@@ -40,10 +41,8 @@ impl GameTrace {
         let mut steps = Vec::new();
 
         for t in 0..trace.move_positions.len() {
-            let board_before = Board::from_bitboards(
-                trace.black_bitboards[t],
-                trace.white_bitboards[t],
-            );
+            let board_before =
+                Board::from_bitboards(trace.black_bitboards[t], trace.white_bitboards[t]);
 
             let prev_is_black = if t < trace.is_black_turns.len() {
                 trace.is_black_turns[t]
@@ -94,6 +93,7 @@ pub struct ReversiConstraints {
     pub white_boards: Vec<SExpr>,
     pub is_black_turn: Vec<SExpr>,
     pub passes: Vec<SExpr>,
+    pub has_moves: Vec<SExpr>,
 }
 
 /// Helper function to compute which pieces would be flipped in a specific direction.
@@ -301,6 +301,7 @@ pub fn generate_reversi_constraints(
     let mut constraints = Vec::new();
     let mut move_positions = Vec::new();
     let mut passes = Vec::new();
+    let mut has_moves_vars = Vec::new();
     let max_moves = final_state.filled_cells_count() - /* initial 4 pieces */ 4;
 
     // Use 36-bit bitvectors for the 6x6 board (bits 0-35)
@@ -406,15 +407,24 @@ pub fn generate_reversi_constraints(
                 ctx.ite(is_black_turn[t], white_boards[t], black_boards[t]);
             let current_player_can_place =
                 ctx.ite(is_black_turn[t], black_can_place_bv, white_can_place_bv);
-            let current_has_moves = has_legal_move(
+            let current_has_moves_expr = has_legal_move(
                 ctx,
                 current_player_board,
                 current_opponent_board,
                 current_player_can_place,
             );
 
+            // Declare a variable to track whether the current player has moves
+            let has_moves_var = ctx
+                .declare_const(&format!("has_moves_{}", t), bool_sort)
+                .unwrap();
+            has_moves_vars.push(has_moves_var);
+
+            // Constrain the variable to equal the computed expression
+            constraints.push(ctx.eq(has_moves_var, current_has_moves_expr));
+
             // If pass, then current player has no legal moves (pass => !has_moves is equivalent to !pass || !has_moves)
-            constraints.push(ctx.or(ctx.not(pass), ctx.not(current_has_moves)));
+            constraints.push(ctx.or(ctx.not(pass), ctx.not(has_moves_var)));
         }
 
         // "Next stage must reflect the move and flips"
@@ -442,6 +452,7 @@ pub fn generate_reversi_constraints(
         white_boards,
         is_black_turn,
         passes,
+        has_moves: has_moves_vars,
     }
 }
 
@@ -513,6 +524,7 @@ impl ReachabilitySolver for Yices2KissatSolver {
         let white_boards = reversi_constraints.white_boards;
         let is_black_turn_vars = reversi_constraints.is_black_turn;
         let passes = reversi_constraints.passes;
+        let has_moves_vars = reversi_constraints.has_moves;
 
         println!("Adding {} constraints to solver...", constraints.len());
         {
@@ -598,12 +610,22 @@ impl ReachabilitySolver for Yices2KissatSolver {
                     })
                     .collect();
 
+                let has_moves_values = has_moves_vars
+                    .iter()
+                    .map(|&var| {
+                        let model = ctx.get_value(vec![var]).expect("Failed to get has_moves");
+                        let val_str = ctx.display(model[0].1).to_string();
+                        parse_bool_value(&val_str)
+                    })
+                    .collect();
+
                 let trace = SolverTrace {
                     black_bitboards: black_bitboard_values,
                     white_bitboards: white_bitboard_values,
                     is_black_turns: is_black_turn_values,
                     move_positions: move_pos_values,
                     passes: pass_values,
+                    has_moves: has_moves_values,
                 };
 
                 ReachabilitySolverResult::Reachable(progression, trace)

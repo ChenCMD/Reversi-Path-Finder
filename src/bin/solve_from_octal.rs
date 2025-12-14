@@ -7,7 +7,7 @@ use reversi_path_finder::reachability_problem::{
     ReachabilityProblem, ReachabilitySolver, ReachabilitySolverResult,
 };
 use reversi_path_finder::yices2_kissat_reachability_solver::{
-    new_yices2_kissat_reachability_solver, GameTrace,
+    new_yices2_kissat_reachability_solver, GameTrace, SolverTrace,
 };
 
 fn player_to_string(player: &PlayerColor) -> &'static str {
@@ -19,6 +19,7 @@ fn player_to_string(player: &PlayerColor) -> &'static str {
 
 fn debug_invalid_solution(
     game_trace: &GameTrace,
+    solver_trace: &SolverTrace,
     black_mask: &PlacementMask,
     white_mask: &PlacementMask,
 ) {
@@ -52,16 +53,26 @@ fn debug_invalid_solution(
 
         // Check if player had available moves
         let available_moves = step.board_before.moves_available(&step.player);
-        let has_moves = !available_moves.is_empty();
+        let has_moves_actual = !available_moves.is_empty();
+        let has_moves_solver = solver_trace.has_moves[i];
 
-        println!("  Player had {} available moves", available_moves.len());
+        println!("  Solver thinks player has moves: {}", has_moves_solver);
+        println!("  Actual available moves: {}", available_moves.len());
 
-        if step.is_pass && has_moves {
+        if has_moves_solver != has_moves_actual {
+            println!(
+                "  ❌ MISMATCH: Solver thinks has_moves={}, but actually has {} moves!",
+                has_moves_solver,
+                available_moves.len()
+            );
+        }
+
+        if step.is_pass && has_moves_actual {
             println!(
                 "  ❌ INVALID PASS: Player passed but had {} available moves!",
                 available_moves.len()
             );
-        } else if !step.is_pass && !has_moves {
+        } else if !step.is_pass && !has_moves_actual {
             println!("  ❌ MISSING PASS: Player has no moves but didn't pass!");
         }
 
@@ -109,7 +120,7 @@ fn main() {
 
             if !instance.admits_as_solution(&progression) {
                 let game_trace = GameTrace::from_solver_trace(&trace);
-                debug_invalid_solution(&game_trace, &black_mask, &white_mask);
+                debug_invalid_solution(&game_trace, &trace, &black_mask, &white_mask);
                 process::exit(1);
             }
 
