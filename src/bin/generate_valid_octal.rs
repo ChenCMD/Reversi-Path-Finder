@@ -4,10 +4,10 @@ use reversi_path_finder::game::INITIAL_BOARD;
 
 fn main() {
     let (black_mask, white_mask, target_board) = loop {
-        let masks = generate_balanced_disjoint_masks();
-        let board = play_random_game_with_masks(&masks.0, &masks.1);
+        let (black_mask, white_mask) = generate_balanced_disjoint_masks();
+        let board = play_random_game_with_masks(&black_mask, &white_mask);
         if board.filled_cells_count() == 36 {
-            break (masks.0, masks.1, board);
+            break (black_mask, white_mask, board);
         }
     };
 
