@@ -37,10 +37,13 @@ fn main() {
             println!("   → UNKNOWN - Solver could not determine reachability\n");
         }
         ReachabilitySolverResult::Reachable(progression) => {
-            assert!(instance.admits_as_solution(&progression));
             println!(
                 "   → Successfully found a progression: {}\n",
                 progression.to_game_record_string()
+            );
+            assert!(instance.admits_as_solution(&progression));
+            println!(
+                "   → Verified that the progression is a valid solution to the reachability problem."
             );
         }
     }
