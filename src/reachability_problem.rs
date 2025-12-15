@@ -23,12 +23,17 @@ impl ReachabilityProblem {
     }
 
     pub fn admits_as_solution(&self, progression: &UncheckedGameProgression) -> bool {
-        if let Some(final_board) = progression.play_through() {
+        if let Some(final_board) =
+            progression.play_through(&self.black_placement_mask, &self.white_placement_mask)
+        {
             self.target_board == final_board
-                && progression.to_moves().iter().all(|mv| match mv.player {
-                    PlayerColor::Black => self.black_placement_mask.can_place_at_cell(mv.cell),
-                    PlayerColor::White => self.white_placement_mask.can_place_at_cell(mv.cell),
-                })
+                && progression
+                    .to_moves(&self.black_placement_mask, &self.white_placement_mask)
+                    .iter()
+                    .all(|mv| match mv.player {
+                        PlayerColor::Black => self.black_placement_mask.can_place_at_cell(mv.cell),
+                        PlayerColor::White => self.white_placement_mask.can_place_at_cell(mv.cell),
+                    })
         } else {
             false
         }

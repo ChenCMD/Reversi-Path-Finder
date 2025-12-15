@@ -85,13 +85,13 @@ fn main() {
     let result = solver.solve(&instance);
 
     match result {
-        ReachabilitySolverResult::Unreachable => {
+        ReachabilitySolverResult::Unreachable(_) => {
             println!("   → The position is NOT REACHABLE\n");
         }
         ReachabilitySolverResult::Unknown => {
             println!("   → UNKNOWN - Solver could not determine reachability\n");
         }
-        ReachabilitySolverResult::Reachable(progression) => {
+        ReachabilitySolverResult::Reachable(progression, _) => {
             assert!(instance.admits_as_solution(&progression));
             println!(
                 "   → Successfully found a progression: {}\n",

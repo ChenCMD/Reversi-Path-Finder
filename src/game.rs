@@ -1,6 +1,6 @@
 use std::sync::LazyLock;
 
-use crate::board::{Board, CellCoord, PlayerColor};
+use crate::board::{Board, CellCoord, PlacementMask, PlayerColor};
 
 #[rustfmt::skip]
 /// Initial Reversi configuration.
@@ -61,16 +61,30 @@ impl UncheckedGameProgression {
 
     fn play_through_and_observe_moves_sequentially(
         &self,
+        black_mask: &PlacementMask,
+        white_mask: &PlacementMask,
         observe: &mut impl FnMut(&Board, &CellCoord, &PlayerColor),
     ) -> Option<Board> {
         let mut board = INITIAL_BOARD.clone();
         let mut current_player = PlayerColor::Black;
 
         for cell in self.0.iter() {
-            let actual_player = if board.moves_available(&current_player).is_empty() {
-                current_player.opponent()
-            } else {
+            // Check if current player has any legal moves
+            let has_moves = {
+                let mask = match current_player {
+                    PlayerColor::Black => black_mask,
+                    PlayerColor::White => white_mask,
+                };
+                board
+                    .moves_available(&current_player)
+                    .iter()
+                    .any(|mv| mask.can_place_at_cell(*mv))
+            };
+
+            let actual_player = if has_moves {
                 current_player
+            } else {
+                current_player.opponent()
             };
 
             observe(&board, cell, &actual_player);
@@ -82,20 +96,32 @@ impl UncheckedGameProgression {
         Some(board)
     }
 
-    pub fn play_through(&self) -> Option<Board> {
-        self.play_through_and_observe_moves_sequentially(&mut |_, _, _| {})
+    pub fn play_through(
+        &self,
+        black_mask: &PlacementMask,
+        white_mask: &PlacementMask,
+    ) -> Option<Board> {
+        self.play_through_and_observe_moves_sequentially(black_mask, white_mask, &mut |_, _, _| {})
     }
 
-    pub fn to_moves(&self) -> Vec<MoveInGame> {
+    pub fn to_moves(
+        &self,
+        black_mask: &PlacementMask,
+        white_mask: &PlacementMask,
+    ) -> Vec<MoveInGame> {
         let mut moves = Vec::new();
 
-        let _ = self.play_through_and_observe_moves_sequentially(&mut |_board, cell, actual_player| {
-            moves.push(MoveInGame {
-                cell: *cell,
-                player: *actual_player,
-                turn_index: moves.len(),
-            })
-        });
+        let _ = self.play_through_and_observe_moves_sequentially(
+            black_mask,
+            white_mask,
+            &mut |_board, cell, actual_player| {
+                moves.push(MoveInGame {
+                    cell: *cell,
+                    player: *actual_player,
+                    turn_index: moves.len(),
+                })
+            },
+        );
 
         moves
     }

@@ -69,7 +69,16 @@ fn debug_invalid_solution(
         }
 
         // Check if the TURN player (who might have passed) had available moves
-        let turn_player_moves = step.board_before.moves_available(&turn_player);
+        let turn_player_mask = match turn_player {
+            PlayerColor::Black => black_mask,
+            PlayerColor::White => white_mask,
+        };
+        let turn_player_moves: Vec<_> = step
+            .board_before
+            .moves_available(&turn_player)
+            .into_iter()
+            .filter(|cell| turn_player_mask.can_place_at_cell(*cell))
+            .collect();
         let has_moves_actual = !turn_player_moves.is_empty();
         let has_moves_solver = solver_trace.has_moves[i];
 
