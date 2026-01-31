@@ -2,6 +2,7 @@ use std::env;
 use std::process;
 
 use reversi_path_finder::board::{Board, PlacementMask};
+use reversi_path_finder::game::INITIAL_BOARD;
 use reversi_path_finder::reachability_problem::{
     ReachabilityProblem, ReachabilitySolver, ReachabilitySolverResult,
 };
@@ -58,14 +59,49 @@ fn main() {
             println!("{}", serde_json::to_string(&payload).unwrap());
         }
         ReachabilitySolverResult::Reachable(progression, trace) => {
-            let progression_str = progression.to_game_record_string();
+            let progression_with_passes = {
+                let mut board = INITIAL_BOARD.clone();
+                let mut current_player = reversi_path_finder::board::PlayerColor::Black;
+                let mut with_passes = String::new();
+
+                for cell in
+                    progression.to_moves(&instance.black_placement_mask, &instance.white_placement_mask)
+                {
+                    let moves_current = board
+                        .moves_available(&current_player)
+                        .into_iter()
+                        .filter(|mv| {
+                            let mask = match current_player {
+                                reversi_path_finder::board::PlayerColor::Black => {
+                                    &instance.black_placement_mask
+                                }
+                                reversi_path_finder::board::PlayerColor::White => {
+                                    &instance.white_placement_mask
+                                }
+                            };
+                            mask.can_place_at_cell(*mv)
+                        })
+                        .collect::<Vec<_>>();
+                    if moves_current.is_empty() {
+                        with_passes.push_str("--");
+                    }
+
+                    with_passes.push_str(&cell.cell.to_string());
+                    board = board
+                        .place_disk(*cell.cell.column(), *cell.cell.row(), &cell.player)
+                        .expect("place_disk failed");
+                    current_player = cell.player.opponent();
+                }
+
+                with_passes
+            };
             if !instance.admits_as_solution(&progression) {
                 let payload = json!({
                     "bin": "solve_from_octal",
                     "status": "error",
                     "error": "invalid_progression",
                     "input": input,
-                    "progression": progression_str,
+                    "progression": progression_with_passes,
                     "solver_trace_steps": trace.is_black_turns.len(),
                 });
                 println!("{}", serde_json::to_string(&payload).unwrap());
@@ -76,7 +112,7 @@ fn main() {
                 "bin": "solve_from_octal",
                 "status": "reachable",
                 "input": input,
-                "progression": progression_str,
+                "progression": progression_with_passes,
             });
             println!("{}", serde_json::to_string(&payload).unwrap());
         }
