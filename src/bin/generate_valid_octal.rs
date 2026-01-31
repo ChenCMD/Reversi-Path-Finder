@@ -1,6 +1,7 @@
 use rand::seq::{IndexedRandom, SliceRandom};
 use reversi_path_finder::board::{Board, PlacementMask, PlayerColor};
 use reversi_path_finder::game::INITIAL_BOARD;
+use serde_json::json;
 
 fn main() {
     let (black_mask, white_mask, target_board) = loop {
@@ -11,23 +12,28 @@ fn main() {
         }
     };
 
-    println!("Generated reachable instance for solve_from_octal:");
-    println!(
-        "cargo run --bin solve_from_octal -- {} {} {} {}",
-        target_board.white_to_octal_string(),
-        target_board.black_to_octal_string(),
-        black_mask.to_octal_string(),
-        white_mask.to_octal_string()
-    );
-    println!(
-        "\nVisual board:\n{}",
-        target_board
-            .to_string_block()
-            .split('\n')
-            .map(|line| format!("\t{}", line))
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
+    let white_board_octal = target_board.white_to_octal_string();
+    let black_board_octal = target_board.black_to_octal_string();
+    let black_mask_octal = black_mask.to_octal_string();
+    let white_mask_octal = white_mask.to_octal_string();
+
+    let payload = json!({
+        "bin": "generate_valid_octal",
+        "status": "ok",
+        "white_board_octal": white_board_octal,
+        "black_board_octal": black_board_octal,
+        "black_mask_octal": black_mask_octal,
+        "white_mask_octal": white_mask_octal,
+        "target_board_ascii": target_board.to_string_block(),
+        "solve_from_octal_command": format!(
+            "cargo run --bin solve_from_octal -- {} {} {} {}",
+            white_board_octal,
+            black_board_octal,
+            black_mask_octal,
+            white_mask_octal
+        ),
+    });
+    println!("{}", serde_json::to_string(&payload).unwrap());
 }
 
 /// Create masks where every cell is assigned to exactly one player and totals are balanced (18 each).
