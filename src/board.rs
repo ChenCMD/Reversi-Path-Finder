@@ -230,8 +230,6 @@ impl Board {
 
     pub fn to_string_block(&self) -> String {
         let mut result = String::new();
-        result.push_str("   ABCDEF\n");
-        result.push_str("   ------\n");
         for (y, row) in self.0.iter().enumerate() {
             result.push_str(&format!("{:1} |", y + 1));
             for &cell in row {
@@ -407,8 +405,6 @@ impl PlacementMask {
 
     pub fn to_string_block(&self) -> String {
         let mut result = String::new();
-        result.push_str("   ABCDEF\n");
-        result.push_str("   ------\n");
         for (y, row) in self.0.iter().enumerate() {
             result.push_str(&format!("{:1} |", y + 1));
             for &cell in row {
