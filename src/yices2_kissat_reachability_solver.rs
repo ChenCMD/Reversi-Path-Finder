@@ -4,7 +4,7 @@ use easy_smt::{ContextBuilder, Response, SExpr};
 
 use crate::{
     board::{BitBoard, Board, CellCoord, PlacementMask},
-    game::{INITIAL_BOARD, UncheckedGameProgression},
+    game::UncheckedGameProgression,
     reachability_problem::{ReachabilityProblem, ReachabilitySolver, ReachabilitySolverResult},
 };
 
@@ -272,6 +272,7 @@ fn has_legal_move(
 pub fn generate_reversi_constraints(
     ctx: &mut easy_smt::Context,
     final_state: &Board,
+    initial_state: &Board,
     black_pmask: PlacementMask,
     white_pmask: PlacementMask,
 ) -> ReversiConstraints {
@@ -343,7 +344,7 @@ pub fn generate_reversi_constraints(
 
     // Constraint: Initial board state
     {
-        let BitBoard { black, white } = INITIAL_BOARD.to_bitboards();
+        let BitBoard { black, white } = initial_state.to_bitboards();
         constraints.push(ctx.eq(black_boards[0], ctx.binary(36, black)));
         constraints.push(ctx.eq(white_boards[0], ctx.binary(36, white)));
     }
@@ -514,6 +515,7 @@ impl ReachabilitySolver for Yices2KissatSolver {
         let reversi_constraints = generate_reversi_constraints(
             &mut ctx,
             &problem.target_board,
+            &problem.initial_board,
             problem.black_placement_mask,
             problem.white_placement_mask,
         );

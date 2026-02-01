@@ -1,8 +1,8 @@
 use std::env;
 use std::process;
 
-use reversi_path_finder::board::{Board, PlacementMask};
-use reversi_path_finder::game::INITIAL_BOARD;
+use reversi_path_finder::board::{Board, CellCoord, PlacementMask};
+use reversi_path_finder::game::initial_board_at;
 use reversi_path_finder::reachability_problem::{
     ReachabilityProblem, ReachabilitySolver, ReachabilitySolverResult,
 };
@@ -11,27 +11,30 @@ use serde_json::json;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 5 {
+    if args.len() != 6 {
         let payload = json!({
             "bin": "solve_from_octal",
             "status": "error",
             "error": "usage",
-            "usage": format!("{} <white-board-octal> <black-board-octal> <black-mask-octal> <white-mask-octal>", args[0]),
+            "usage": format!("{} <origin> <white-board-octal> <black-board-octal> <black-mask-octal> <white-mask-octal>", args[0]),
         });
         println!("{}", serde_json::to_string(&payload).unwrap());
         process::exit(1);
     }
 
-    let white_board_octal = &args[1];
-    let black_board_octal = &args[2];
-    let black_mask_octal = &args[3];
-    let white_mask_octal = &args[4];
+    let origin_cell = parse_cell(&args[1]);
+    let white_board_octal = &args[2];
+    let black_board_octal = &args[3];
+    let black_mask_octal = &args[4];
+    let white_mask_octal = &args[5];
 
     let target_board = Board::from_octal_strings(white_board_octal, black_board_octal);
     let black_mask = PlacementMask::from_octal_string(black_mask_octal);
     let white_mask = PlacementMask::from_octal_string(white_mask_octal);
+    let initial_board = initial_board_at(origin_cell);
 
-    let instance = ReachabilityProblem::new(target_board, black_mask, white_mask);
+    let instance =
+        ReachabilityProblem::new(target_board, black_mask, white_mask, initial_board.clone());
 
     let mut solver = new_yices2_kissat_reachability_solver();
     let input = json!({
@@ -39,6 +42,7 @@ fn main() {
         "black_board_octal": black_board_octal,
         "black_mask_octal": black_mask_octal,
         "white_mask_octal": white_mask_octal,
+        "origin": origin_cell.to_string(),
     });
 
     match solver.solve(&instance) {
@@ -60,13 +64,14 @@ fn main() {
         }
         ReachabilitySolverResult::Reachable(progression, trace) => {
             let progression_with_passes = {
-                let mut board = INITIAL_BOARD.clone();
+                let mut board = initial_board.clone();
                 let mut current_player = reversi_path_finder::board::PlayerColor::Black;
                 let mut with_passes = String::new();
 
                 for cell in progression.to_moves(
                     &instance.black_placement_mask,
                     &instance.white_placement_mask,
+                    &instance.initial_board,
                 ) {
                     let moves_current = board
                         .moves_available(&current_player)
@@ -118,4 +123,20 @@ fn main() {
             println!("{}", serde_json::to_string(&payload).unwrap());
         }
     }
+}
+
+fn parse_cell(s: &str) -> CellCoord {
+    let bytes = s.as_bytes();
+    if bytes.len() != 2 {
+        panic!("Origin must be like C3");
+    }
+    let col = bytes[0].to_ascii_uppercase() - b'A';
+    let row = bytes[1] - b'1';
+    if col >= 6 || row >= 6 {
+        panic!("Origin out of board: {}", s);
+    }
+    if col > 4 || row > 4 {
+        panic!("Origin must allow 2x2 block to fit (A1-E5): {}", s);
+    }
+    CellCoord::new(col, row)
 }

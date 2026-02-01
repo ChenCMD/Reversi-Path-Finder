@@ -2,7 +2,7 @@ use std::env;
 use std::process;
 
 use reversi_path_finder::board::{Board, CellCoord, PlacementMask, PlayerColor};
-use reversi_path_finder::game::{INITIAL_BOARD, UncheckedGameProgression};
+use reversi_path_finder::game::{UncheckedGameProgression, initial_board_at};
 use reversi_path_finder::reachability_problem::ReachabilityProblem;
 
 fn player_to_string(player: &PlayerColor) -> &'static str {
@@ -55,9 +55,9 @@ fn print_board_visual(board: &Board) {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    if args.len() != 6 {
+    if args.len() != 7 {
         eprintln!(
-            "Usage: {} <white-board-octal> <black-board-octal> <black-mask-octal> <white-mask-octal> <progression>",
+            "Usage: {} <white-board-octal> <black-board-octal> <black-mask-octal> <white-mask-octal> <progression> <origin>",
             args[0]
         );
         process::exit(1);
@@ -68,12 +68,15 @@ fn main() {
     let black_mask_octal = &args[3];
     let white_mask_octal = &args[4];
     let progression_str = &args[5];
+    let origin = parse_cell(&args[6]);
 
     let target_board = Board::from_octal_strings(white_board_octal, black_board_octal);
     let black_mask = PlacementMask::from_octal_string(black_mask_octal);
     let white_mask = PlacementMask::from_octal_string(white_mask_octal);
+    let initial_board = initial_board_at(origin);
 
-    let instance = ReachabilityProblem::new(target_board, black_mask, white_mask);
+    let instance =
+        ReachabilityProblem::new(target_board, black_mask, white_mask, initial_board.clone());
 
     let progression = UncheckedGameProgression::from_game_record_string(progression_str);
 
@@ -83,7 +86,7 @@ fn main() {
     print_board_visual(&target_board);
     println!("\n=== STEPPING THROUGH MOVES ===\n");
 
-    let mut board = INITIAL_BOARD.clone();
+    let mut board = initial_board.clone();
     let mut current_player = PlayerColor::Black;
     let mut move_number = 0;
 
@@ -195,4 +198,20 @@ fn main() {
 
     println!("\n=== SUCCESS ===");
     println!("The progression is completely valid!");
+}
+
+fn parse_cell(s: &str) -> CellCoord {
+    let bytes = s.as_bytes();
+    if bytes.len() != 2 {
+        panic!("Origin must be like C3");
+    }
+    let col = bytes[0].to_ascii_uppercase() - b'A';
+    let row = bytes[1] - b'1';
+    if col >= 6 || row >= 6 {
+        panic!("Origin out of board: {}", s);
+    }
+    if col > 4 || row > 4 {
+        panic!("Origin must allow 2x2 block to fit (A1-E5): {}", s);
+    }
+    CellCoord::new(col, row)
 }

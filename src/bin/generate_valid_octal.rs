@@ -1,12 +1,17 @@
+use rand::Rng;
 use rand::seq::{IndexedRandom, SliceRandom};
-use reversi_path_finder::board::{Board, PlacementMask, PlayerColor};
-use reversi_path_finder::game::INITIAL_BOARD;
+use reversi_path_finder::board::{Board, CellCoord, PlacementMask, PlayerColor};
+use reversi_path_finder::game::initial_board_at;
 use serde_json::json;
 
 fn main() {
+    // Pick a random origin for the initial 2x2 block (A1-E5 inclusive).
+    let origin = random_origin();
+    let initial_board = initial_board_at(origin);
+
     let (black_mask, white_mask, target_board) = loop {
-        let (black_mask, white_mask) = generate_balanced_disjoint_masks();
-        let board = play_random_game_with_masks(&black_mask, &white_mask);
+        let (black_mask, white_mask) = generate_balanced_disjoint_masks(origin);
+        let board = play_random_game_with_masks(&black_mask, &white_mask, &initial_board);
         if board.filled_cells_count() == 36 {
             break (black_mask, white_mask, board);
         }
@@ -24,9 +29,11 @@ fn main() {
         "black_board_octal": black_board_octal,
         "black_mask_octal": black_mask_octal,
         "white_mask_octal": white_mask_octal,
+        "origin": origin_string(origin),
         "target_board_ascii": target_board.to_string_block(),
         "solve_from_octal_command": format!(
-            "cargo run --bin solve_from_octal -- {} {} {} {}",
+            "cargo run --bin solve_from_octal -- {} {} {} {} {}",
+            origin_string(origin),
             white_board_octal,
             black_board_octal,
             black_mask_octal,
@@ -37,10 +44,16 @@ fn main() {
 }
 
 /// Create masks where every cell is assigned to exactly one player and totals are balanced (18 each).
-fn generate_balanced_disjoint_masks() -> (PlacementMask, PlacementMask) {
+fn generate_balanced_disjoint_masks(origin: CellCoord) -> (PlacementMask, PlacementMask) {
     // Reserve the initial four stones for their starting colors.
-    let white_reserved = [(2, 2), (3, 3)]; // C3, D4
-    let black_reserved = [(3, 2), (2, 3)]; // D3, C4
+    let white_reserved = [
+        (*origin.column() as usize, *origin.row() as usize),
+        (*origin.column() as usize + 1, *origin.row() as usize + 1),
+    ];
+    let black_reserved = [
+        (*origin.column() as usize + 1, *origin.row() as usize),
+        (*origin.column() as usize, *origin.row() as usize + 1),
+    ];
 
     let mut coords: Vec<(usize, usize)> = (0..6)
         .flat_map(|y| (0..6).map(move |x| (x, y)))
@@ -73,8 +86,12 @@ fn generate_balanced_disjoint_masks() -> (PlacementMask, PlacementMask) {
 }
 
 /// Play a random game that respects the provided placement masks.
-fn play_random_game_with_masks(black_mask: &PlacementMask, white_mask: &PlacementMask) -> Board {
-    let mut board = INITIAL_BOARD.clone();
+fn play_random_game_with_masks(
+    black_mask: &PlacementMask,
+    white_mask: &PlacementMask,
+    initial_board: &Board,
+) -> Board {
+    let mut board = initial_board.clone();
     let mut current_player = PlayerColor::Black;
 
     // Play until neither side can move; cap at 36 plies.
@@ -121,4 +138,15 @@ fn moves_available_with_mask(
         .into_iter()
         .filter(|cell| mask.can_place_at_cell(*cell))
         .collect()
+}
+
+fn origin_string(cell: CellCoord) -> String {
+    cell.to_string()
+}
+
+fn random_origin() -> CellCoord {
+    // columns/rows 0..=4 keep 2x2 block inside board
+    let col = rand::rng().random_range(0..5) as u8;
+    let row = rand::rng().random_range(0..5) as u8;
+    CellCoord::new(col, row)
 }

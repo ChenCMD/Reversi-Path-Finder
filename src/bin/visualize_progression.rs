@@ -3,7 +3,7 @@ use std::io::{self, Read};
 use std::process;
 
 use reversi_path_finder::board::{Board, CellCoord, PlacementMask, PlayerColor};
-use reversi_path_finder::game::INITIAL_BOARD;
+use reversi_path_finder::game::initial_board_at;
 use serde_json::Value;
 use serde_json::json;
 
@@ -42,6 +42,39 @@ fn json_get_str<'a>(value: &'a Value, key: &str) -> Option<&'a str> {
     value.get(key).and_then(|v| v.as_str())
 }
 
+fn parse_cell(s: &str) -> CellCoord {
+    let bytes = s.as_bytes();
+    if bytes.len() != 2 {
+        error_and_exit(
+            "invalid_origin",
+            Some(format!("Origin must be like C3: {}", s)),
+        );
+    }
+    let col = bytes[0].to_ascii_uppercase() - b'A';
+    let row = bytes[1] - b'1';
+    if col >= 6 || row >= 6 {
+        error_and_exit(
+            "invalid_origin",
+            Some(format!("Origin out of board: {}", s)),
+        );
+    }
+    if col > 4 || row > 4 {
+        error_and_exit(
+            "invalid_origin",
+            Some(format!("Origin must allow 2x2 block to fit (A1-E5): {}", s)),
+        );
+    }
+    CellCoord::new(col, row)
+}
+
+fn parse_origin_json(root: &Value, input: &Value) -> CellCoord {
+    if let Some(s) = json_get_str(root, "origin").or_else(|| json_get_str(input, "origin")) {
+        parse_cell(s)
+    } else {
+        CellCoord::new(2, 2)
+    }
+}
+
 fn moves_available_with_mask(
     board: &Board,
     player: &PlayerColor,
@@ -66,6 +99,7 @@ fn parse_from_json(
     Option<Board>,
     Option<PlacementMask>,
     Option<PlacementMask>,
+    CellCoord,
 ) {
     let progression = json_get_str(value, "progression")
         .unwrap_or_else(|| error_and_exit("missing_progression", None))
@@ -76,6 +110,7 @@ fn parse_from_json(
     let black_board = json_get_str(input, "black_board_octal");
     let black_mask = json_get_str(input, "black_mask_octal");
     let white_mask = json_get_str(input, "white_mask_octal");
+    let origin = parse_origin_json(value, input);
 
     if let (Some(white_board), Some(black_board), Some(black_mask), Some(white_mask)) =
         (white_board, black_board, black_mask, white_mask)
@@ -88,34 +123,41 @@ fn parse_from_json(
             Some(target_board),
             Some(black_mask),
             Some(white_mask),
+            origin,
         )
     } else {
-        (progression, None, None, None)
+        (progression, None, None, None, origin)
     }
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let (progression_str, target_board, black_mask, white_mask) = if args.len() == 1 {
+    let (progression_str, target_board, black_mask, white_mask, origin) = if args.len() == 1 {
         let value = read_stdin_json();
         parse_from_json(&value)
-    } else if args.len() == 2 {
-        (args[1].clone(), None, None, None)
+    } else if args.len() == 2 || args.len() == 3 {
+        let origin = if args.len() == 3 {
+            parse_cell(&args[2])
+        } else {
+            CellCoord::new(2, 2)
+        };
+        (args[1].clone(), None, None, None, origin)
     } else {
         let payload = json!({
             "bin": "visualize_progression",
             "status": "error",
             "error": "usage",
             "usage": format!(
-                "{} <progression>  (or JSON via stdin with progression and optional input)",
-                args[0]
+                "{} <progression> [origin]  (or JSON via stdin with progression and optional input+origin)",
+                args[0],
             ),
         });
         println!("{}", serde_json::to_string(&payload).unwrap());
         process::exit(1);
     };
 
-    let mut board = INITIAL_BOARD.clone();
+    let initial_board = initial_board_at(origin);
+    let mut board = initial_board.clone();
     let mut current_player = PlayerColor::Black;
     let mut move_number = 0;
     let mut steps = Vec::new();
@@ -222,7 +264,8 @@ fn main() {
         "bin": "visualize_progression",
         "status": "ok",
         "progression": progression_str,
-        "initial_board_ascii": INITIAL_BOARD.to_string_block(),
+        "origin": origin.to_string(),
+        "initial_board_ascii": initial_board.to_string_block(),
         "final_board_ascii": board.to_string_block(),
         "final_matches_target": target_board.as_ref().map(|t| *t == board),
         "steps": steps,

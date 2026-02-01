@@ -1,6 +1,6 @@
 use rand::seq::IndexedRandom;
 use reversi_path_finder::board::{Board, PlacementMask};
-use reversi_path_finder::game::INITIAL_BOARD;
+use reversi_path_finder::game::{INITIAL_BOARD, initial_board_at};
 use reversi_path_finder::reachability_problem::{
     ReachabilityProblem, ReachabilitySolver, ReachabilitySolverResult,
 };
@@ -68,6 +68,7 @@ fn randomly_play_in_conformance_to_masks(
 }
 
 fn main() {
+    let initial_board = initial_board_at(reversi_path_finder::board::CellCoord::new(2, 2));
     let mut solver = new_yices2_kissat_reachability_solver();
 
     let instance = {
@@ -77,6 +78,7 @@ fn main() {
             randomly_play_in_conformance_to_masks(&black_mask, &white_mask),
             black_mask,
             white_mask,
+            initial_board.clone(),
         )
     };
 

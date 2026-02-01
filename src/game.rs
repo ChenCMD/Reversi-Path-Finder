@@ -2,19 +2,32 @@ use std::sync::LazyLock;
 
 use crate::board::{Board, CellCoord, PlacementMask, PlayerColor};
 
-#[rustfmt::skip]
-/// Initial Reversi configuration.
-pub const INITIAL_BOARD: LazyLock<Board> = LazyLock::new(|| {
-    Board::from_012_array([
-        /*       A  B  C  D  E  F */
-        /* 1 */ [0, 0, 0, 0, 0, 0],
-        /* 2 */ [0, 0, 0, 0, 0, 0],
-        /* 3 */ [0, 0, 1, 2, 0, 0],
-        /* 4 */ [0, 0, 2, 1, 0, 0],
-        /* 5 */ [0, 0, 0, 0, 0, 0],
-        /* 6 */ [0, 0, 0, 0, 0, 0],
-    ])
-});
+/// Build the initial Reversi board with a 2x2 block whose top-left corner is `origin`.
+/// Color layout (same as standard Reversi):
+///   origin       -> White
+///   origin + (1,0)-> Black
+///   origin + (0,1)-> Black
+///   origin + (1,1)-> White
+pub fn initial_board_at(origin: CellCoord) -> Board {
+    if *origin.column() > 4 || *origin.row() > 4 {
+        panic!("Initial block origin must fit within 6x6 board (A1-E5)");
+    }
+
+    let mut arr = [[0u8; 6]; 6];
+    let x = *origin.column() as usize;
+    let y = *origin.row() as usize;
+
+    arr[y][x] = 1; // White
+    arr[y][x + 1] = 2; // Black
+    arr[y + 1][x] = 2; // Black
+    arr[y + 1][x + 1] = 1; // White
+
+    Board::from_012_array(arr)
+}
+
+/// Default initial board (origin at C3 as before).
+pub static INITIAL_BOARD: LazyLock<Board> =
+    LazyLock::new(|| initial_board_at(CellCoord::new(2, 2)));
 
 pub struct MoveInGame {
     pub cell: CellCoord,
@@ -63,9 +76,10 @@ impl UncheckedGameProgression {
         &self,
         black_mask: &PlacementMask,
         white_mask: &PlacementMask,
+        initial_board: &Board,
         observe: &mut impl FnMut(&Board, &CellCoord, &PlayerColor),
     ) -> Option<Board> {
-        let mut board = INITIAL_BOARD.clone();
+        let mut board = initial_board.clone();
         let mut current_player = PlayerColor::Black;
 
         for cell in self.0.iter() {
@@ -100,20 +114,28 @@ impl UncheckedGameProgression {
         &self,
         black_mask: &PlacementMask,
         white_mask: &PlacementMask,
+        initial_board: &Board,
     ) -> Option<Board> {
-        self.play_through_and_observe_moves_sequentially(black_mask, white_mask, &mut |_, _, _| {})
+        self.play_through_and_observe_moves_sequentially(
+            black_mask,
+            white_mask,
+            initial_board,
+            &mut |_, _, _| {},
+        )
     }
 
     pub fn to_moves(
         &self,
         black_mask: &PlacementMask,
         white_mask: &PlacementMask,
+        initial_board: &Board,
     ) -> Vec<MoveInGame> {
         let mut moves = Vec::new();
 
         let _ = self.play_through_and_observe_moves_sequentially(
             black_mask,
             white_mask,
+            initial_board,
             &mut |_board, cell, actual_player| {
                 moves.push(MoveInGame {
                     cell: *cell,
