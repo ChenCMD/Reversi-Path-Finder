@@ -64,9 +64,10 @@ fn main() {
                 let mut current_player = reversi_path_finder::board::PlayerColor::Black;
                 let mut with_passes = String::new();
 
-                for cell in
-                    progression.to_moves(&instance.black_placement_mask, &instance.white_placement_mask)
-                {
+                for cell in progression.to_moves(
+                    &instance.black_placement_mask,
+                    &instance.white_placement_mask,
+                ) {
                     let moves_current = board
                         .moves_available(&current_player)
                         .into_iter()

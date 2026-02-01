@@ -4,8 +4,8 @@ use std::process;
 
 use reversi_path_finder::board::{Board, CellCoord, PlacementMask, PlayerColor};
 use reversi_path_finder::game::INITIAL_BOARD;
-use serde_json::json;
 use serde_json::Value;
+use serde_json::json;
 
 fn player_to_string(player: &PlayerColor) -> &'static str {
     match player {
@@ -59,7 +59,14 @@ fn moves_available_with_mask(
         .collect()
 }
 
-fn parse_from_json(value: &Value) -> (String, Option<Board>, Option<PlacementMask>, Option<PlacementMask>) {
+fn parse_from_json(
+    value: &Value,
+) -> (
+    String,
+    Option<Board>,
+    Option<PlacementMask>,
+    Option<PlacementMask>,
+) {
     let progression = json_get_str(value, "progression")
         .unwrap_or_else(|| error_and_exit("missing_progression", None))
         .to_string();
@@ -76,7 +83,12 @@ fn parse_from_json(value: &Value) -> (String, Option<Board>, Option<PlacementMas
         let target_board = Board::from_octal_strings(white_board, black_board);
         let black_mask = PlacementMask::from_octal_string(black_mask);
         let white_mask = PlacementMask::from_octal_string(white_mask);
-        (progression, Some(target_board), Some(black_mask), Some(white_mask))
+        (
+            progression,
+            Some(target_board),
+            Some(black_mask),
+            Some(white_mask),
+        )
     } else {
         (progression, None, None, None)
     }
