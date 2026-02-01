@@ -38,16 +38,29 @@ fn main() {
 
 /// Create masks where every cell is assigned to exactly one player and totals are balanced (18 each).
 fn generate_balanced_disjoint_masks() -> (PlacementMask, PlacementMask) {
-    let excluded = [(2, 2), (3, 2), (2, 3), (3, 3)]; // initial center 4
+    // Reserve the initial four stones for their starting colors.
+    let white_reserved = [(2, 2), (3, 3)]; // C3, D4
+    let black_reserved = [(3, 2), (2, 3)]; // D3, C4
+
     let mut coords: Vec<(usize, usize)> = (0..6)
         .flat_map(|y| (0..6).map(move |x| (x, y)))
-        .filter(|c| !excluded.contains(c))
+        .filter(|c| !white_reserved.contains(c) && !black_reserved.contains(c))
         .collect();
     coords.shuffle(&mut rand::rng());
 
     let mut black = [[false; 6]; 6];
     let mut white = [[false; 6]; 6];
-    let split = coords.len() / 2; // should be 16 with 32 usable cells
+
+    // Place the reserved initial stones into their respective masks.
+    for (x, y) in white_reserved {
+        white[y][x] = true;
+    }
+    for (x, y) in black_reserved {
+        black[y][x] = true;
+    }
+
+    // Fill the remaining 32 cells evenly: 16 to each side.
+    let split = coords.len() / 2; // 16
     for (i, (x, y)) in coords.into_iter().enumerate() {
         if i < split {
             black[y][x] = true;
